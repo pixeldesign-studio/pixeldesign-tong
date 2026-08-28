@@ -5776,21 +5776,46 @@ const App = {
     // "So du dau" la ban ghi trong TAI_CHINH_TONG co cot loai = "Số dư đầu".
     let soDuDau = 0;
     let coSoDuDau = false;
+    let ngayChotSoDu = null;      // moc thoi gian cua ban ghi "So du dau"
     let thuTatCa = 0, chiTatCa = 0;
     const homNay = new Date(); homNay.setHours(23, 59, 59, 999);
 
+    // B1: tim ban ghi "So du dau" (neu khai nhieu lan thi lay ban MOI NHAT)
+    (this._taiChinhManualData || []).forEach(r => {
+      if ((r.loai || '').trim() !== 'Số dư đầu') return;
+      if (!ngayChotSoDu || r.parsedDate > ngayChotSoDu) {
+        ngayChotSoDu = r.parsedDate;
+        soDuDau = r.so_tien;
+        coSoDuDau = true;
+      }
+    });
+
+    // B2: ban ghi "So du dau" duoc hieu la SO DU CUOI NGAY do.
+    // Nen chi cong cac khoan phat sinh TU NGAY HOM SAU tro di.
+    // Neu cong ca lich su truoc do thi so du se bi doi len nhieu lan,
+    // vi so du chot DA BAO GOM toan bo tien kiem duoc truoc do roi.
+    let mocSoDu = null;
+    if (ngayChotSoDu) {
+      mocSoDu = new Date(ngayChotSoDu);
+      mocSoDu.setHours(23, 59, 59, 999);   // het ngay chot
+    }
+    const trongPhamVi = (d) => d <= homNay && (!mocSoDu || d > mocSoDu);
+
     (this._taiChinhManualData || []).forEach(r => {
       const l = (r.loai || '').trim();
-      if (l === 'Số dư đầu') { soDuDau += r.so_tien; coSoDuDau = true; return; }
-      if (r.parsedDate > homNay) return;
+      if (l === 'Số dư đầu') return;
+      if (!trongPhamVi(r.parsedDate)) return;
       if (l === 'Thu') thuTatCa += r.so_tien;
       else if (l === 'Chi') chiTatCa += r.so_tien;
     });
     (this._taiChinhAutoData || []).forEach(r => {
-      if (r.parsedDate > homNay) return;
+      if (!trongPhamVi(r.parsedDate)) return;
       thuTatCa += r.so_tien;
     });
     const soDuThucTe = soDuDau + thuTatCa - chiTatCa;
+    const ngayChotStr = ngayChotSoDu
+      ? `${String(ngayChotSoDu.getDate()).padStart(2,'0')}/${String(ngayChotSoDu.getMonth()+1).padStart(2,'0')}/${ngayChotSoDu.getFullYear()}`
+      : '';
 
     const btnStyle = "padding:6px 12px; border-radius:16px; border:1px solid var(--clr-border-light); background:var(--clr-surface); cursor:pointer; font-size:13px; font-weight:500; color:var(--clr-text); transition:all 0.2s;";
     const btnActiveStyle = "padding:6px 12px; border-radius:16px; border:1px solid var(--clr-accent); background:var(--clr-accent); color:#fff; cursor:pointer; font-size:13px; font-weight:500; transition:all 0.2s;";
@@ -5862,12 +5887,12 @@ const App = {
             <div style="font-size:28px; font-weight:800; margin-top:4px;">${this._formatVND(soDuThucTe)}</div>
             <div style="font-size:12px; opacity:0.8; margin-top:6px;">
               ${coSoDuDau
-                ? `Số dư đầu ${this._formatVND(soDuDau)} + đã thu ${this._formatVND(thuTatCa)} − đã chi ${this._formatVND(chiTatCa)}`
+                ? `Chốt cuối ngày ${ngayChotStr}: ${this._formatVND(soDuDau)} + đã thu ${this._formatVND(thuTatCa)} − đã chi ${this._formatVND(chiTatCa)} (tính từ ngày kế tiếp trở đi)`
                 : 'Chưa khai Số dư đầu — con số này chỉ là thu trừ chi, chưa phải số dư thật.'}
             </div>
           </div>
           ${coSoDuDau ? '' : `<div style="font-size:12px; max-width:340px; background:rgba(198,40,40,0.08); color:#C62828; border-radius:8px; padding:10px 12px; line-height:1.5;">
-            Để con số này khớp với tài khoản ngân hàng, hãy thêm <b>một</b> khoản có Loại = <b>Số dư đầu</b>, ngày là ngày bắt đầu ghi sổ, số tiền là số dư tài khoản lúc đó.
+            Để con số này khớp tài khoản ngân hàng: thêm <b>một</b> khoản Loại = <b>Số dư đầu</b>, ngày là <b>ngày chốt sổ</b>, số tiền là <b>số dư cuối ngày hôm đó</b>. App chỉ cộng thu và trừ chi <b>từ ngày kế tiếp</b> trở đi.
           </div>`}
         </div>
 
@@ -5887,7 +5912,7 @@ const App = {
               <select id="tct-loai" class="form-select" style="width:100%;">
                 <option value="Thu">Thu</option>
                 <option value="Chi">Chi</option>
-                <option value="Số dư đầu">Số dư đầu (chỉ khai 1 lần)</option>
+                <option value="Số dư đầu">Số dư chốt sổ (số dư cuối ngày)</option>
               </select>
             </div>
             <div>
