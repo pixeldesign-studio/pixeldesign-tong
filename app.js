@@ -146,7 +146,7 @@ const App = {
   _getPageMeta(page) {
     const map = {
       'doanh-thu-etsy':      { title: 'Doanh thu Etsy',       subtitle: 'Báo cáo doanh thu từ Etsy',            icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\"/><polyline points=\"16 7 22 7 22 13\"/></svg>', color: '#8A724C' },
-      'keo-doanh-thu-pixel': { title: 'Kéo doanh thu Pixel',  subtitle: 'Kéo dữ liệu từ Pixeldesign CRM',        icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><path d=\"M6 12h.01M18 12h.01\"/></svg>', color: '#5B8DB8' },
+      'keo-doanh-thu-pixel': { title: 'Doanh thu Pixel',  subtitle: 'Số liệu lấy trực tiếp từ app PIXELDESIGN',        icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><path d=\"M6 12h.01M18 12h.01\"/></svg>', color: '#5B8DB8' },
       'phan-tich-tong':      { title: 'Phân tích tổng',       subtitle: 'Biểu đồ và phân tích chuyên sâu',        icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 3v18h18\"/><path d=\"M18 17V9\"/><path d=\"M13 17V5\"/><path d=\"M8 17v-3\"/></svg>', color: '#E74C3C' },
       'tai-chinh-tong':      { title: 'Tài chính tổng',       subtitle: 'Quản lý thu chi và tài chính',           icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12V7H5a2 2 0 0 1 0-4h14v4\"/><path d=\"M3 5v14a2 2 0 0 0 2 2h16v-5\"/><path d=\"M18 12a2 2 0 0 0 0 4h4v-4z\"/></svg>', color: '#F39C12' },
       'hieu-suat-nhan-su':   { title: 'Chi lương & Hiệu suất', subtitle: 'Phân tích chi phí lương và hiệu suất', icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>', color: '#27AE60' },
@@ -2396,6 +2396,192 @@ const App = {
     }
   },
 
+  _tinhSoTienGiam(don) {
+    if (!don) return 0;
+    const tongGiaTri = this._parseCurrency(don.tong_gia_tri);
+    if (tongGiaTri <= 0) return 0;
+    
+    const loaiGiam = (don.giam_gia_loai || '').trim();
+    if (!loaiGiam) return 0;
+    
+    let giaTriGiam = 0;
+    if (loaiGiam === 'amount') {
+       giaTriGiam = this._parseCurrency(don.giam_gia_gia_tri);
+    } else if (loaiGiam === 'percent') {
+       // Allow decimal percentages
+       const percentStr = (don.giam_gia_gia_tri || '').toString().replace(/,/g, '.');
+       const percent = parseFloat(percentStr);
+       if (!isNaN(percent) && percent > 0 && percent <= 100) {
+          giaTriGiam = Math.round(tongGiaTri * (percent / 100));
+       }
+    }
+    
+    if (giaTriGiam < 0) return 0;
+    if (giaTriGiam > tongGiaTri) return tongGiaTri; // Max discount is 100%
+    return giaTriGiam;
+  },
+
+  _tinhSoPhaiThu(don) {
+    if (!don) return 0;
+    const tongGiaTri = this._parseCurrency(don.tong_gia_tri);
+    if (tongGiaTri <= 0) return 0;
+    
+    const giamGia = this._tinhSoTienGiam(don);
+    const phaiThu = tongGiaTri - giamGia;
+    return phaiThu < 0 ? 0 : phaiThu;
+  },
+
+  _showChiTietHoan() {
+    if (!this._doanhThuCurrentFilteredData) return;
+    
+    // 1. Lọc giao dịch hoàn trong kỳ
+    const hoanList = this._doanhThuCurrentFilteredData.filter(r => r.so_tien < 0);
+    
+    let totalHoan = 0;
+    
+    // 2. Build HTML cho từng dòng
+    const htmlRows = hoanList.map(r => {
+      const tienHoan = Math.abs(r.so_tien);
+      totalHoan += tienHoan;
+      
+      let khachHang = 'Không rõ';
+      if (this._doanhThuDonHangList) {
+         const don = this._doanhThuDonHangList.find(d => d.ma_don === r.ma_don);
+         if (don) {
+            khachHang = don.ten_khach_hang || don.ten_khach || don.brand || 'Không rõ';
+         }
+      }
+      
+      return `
+        <tr>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); font-weight:600; color:#4A4036;">${this._escHtml(r.ma_don || '')}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); color:#5C544D;">${this._escHtml(khachHang)}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); color:#C62828; font-weight:700; text-align:right;">${this._formatVND(tienHoan)}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); text-align:right; color:#8A724C;">${this._escHtml(r.ngay || '')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const emptyHtml = `<tr><td colspan="4" style="text-align:center; padding:48px 16px; color:#8A724C; font-style:italic;">Kỳ này không có khoản hoàn nào.</td></tr>`;
+
+    // 3. Dựng cấu trúc Popup
+    const modalHtml = `
+      <div id="modal-chitiet-hoan" style="position:fixed; inset:0; background:rgba(42,36,32,0.4); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeIn 0.25s ease-out;">
+        <div style="background:#FAF8F5; width:100%; max-width:800px; border-radius:24px; box-shadow:0 24px 48px rgba(42,36,32,0.12), 0 0 0 1px rgba(138,114,76,0.1); display:flex; flex-direction:column; max-height:90vh; overflow:hidden;">
+          
+          <div style="padding:24px 32px; background:linear-gradient(to right, #FAF8F5, #FFF); display:flex; justify-content:space-between; align-items:center; position:relative;">
+            <h3 style="margin:0; font-size:20px; color:#2A2420; font-weight:800; letter-spacing:-0.3px;">Chi tiết hoàn tiền</h3>
+            <button onclick="document.getElementById('modal-chitiet-hoan').remove()" style="background:rgba(138,114,76,0.08); border:none; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#8A724C; transition:all 0.2s;" onmouseover="this.style.background='rgba(138,114,76,0.15)'" onmouseout="this.style.background='rgba(138,114,76,0.08)'">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          
+          <div style="padding:0 32px 16px 32px; background:linear-gradient(to right, #FAF8F5, #FFF);">
+            <div style="background:linear-gradient(135deg, #FFF6EF, #FDF0F4); border-radius:12px; padding:12px 16px; display:flex; gap:12px; align-items:flex-start; box-shadow:inset 0 0 0 1px rgba(138,114,76,0.1);">
+              <div style="color:#8A724C; margin-top:2px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              </div>
+              <div style="font-size:13px; color:#5C544D; line-height:1.5;">Khoản hoàn được ghi nhận vào tháng thực hiện hoàn tiền (theo ngày hoàn), không điều chỉnh ngược lại doanh thu tháng phát sinh đơn.</div>
+            </div>
+          </div>
+          
+          <div style="flex:1; overflow-y:auto; padding:0 32px 16px 32px; background:#FFF;">
+            <table style="width:100%; border-collapse:collapse; font-size:14px;">
+              <thead style="position:sticky; top:0; z-index:2; background:#FFF;">
+                <tr>
+                  <th style="padding:12px 24px; text-align:left; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Mã đơn</th>
+                  <th style="padding:12px 24px; text-align:left; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Khách hàng</th>
+                  <th style="padding:12px 24px; text-align:right; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Số tiền hoàn</th>
+                  <th style="padding:12px 24px; text-align:right; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Ngày hoàn</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${hoanList.length > 0 ? htmlRows : emptyHtml}
+              </tbody>
+            </table>
+          </div>
+          
+          <div style="padding:24px 32px; background:linear-gradient(to right, #FFEBEE, #FDE0E4); display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:700; color:#C62828; font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">Tổng tiền hoàn</div>
+            <div style="font-weight:800; color:#B71C1C; font-size:24px;">${this._formatVND(totalHoan)}</div>
+          </div>
+          
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  },
+
+  _showDonKhongDong() {
+    const list = this._zeroValueOrdersFiltered || [];
+    
+    // Build HTML cho từng dòng
+    const htmlRows = list.map(don => {
+      const isCancelled = don.trang_thai && don.trang_thai.toLowerCase().startsWith('hủy');
+      const khachHang = don.ten_khach_hang || don.ten_khach || don.brand || 'Không rõ';
+      const sale = don.sale_phu_trach || 'Không rõ';
+      const trangThaiHtml = isCancelled 
+        ? `<span style="color:#D32F2F; font-weight:700; background:rgba(211,47,47,0.1); padding:4px 8px; border-radius:4px;">${this._escHtml(don.trang_thai)}</span>`
+        : `<span style="color:#388E3C; font-weight:600;">${this._escHtml(don.trang_thai || 'Đang chạy')}</span>`;
+        
+      return `
+        <tr>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); font-weight:600; color:#4A4036;">${this._escHtml(don.ma_don || '')}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); color:#5C544D;">${this._escHtml(khachHang)}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); color:#1565C0; font-weight:600;">${this._escHtml(sale)}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); text-align:right; color:#8A724C;">${this._escHtml(don.ngay_len_don || don.ngay_tao || '')}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); text-align:right;">${trangThaiHtml}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const emptyHtml = `<tr><td colspan="5" style="text-align:center; padding:48px 16px; color:#8A724C; font-style:italic;">Không có đơn giá trị 0đ nào.</td></tr>`;
+
+    // Dựng cấu trúc Popup
+    const modalHtml = `
+      <div id="modal-don-khong-dong" style="position:fixed; inset:0; background:rgba(42,36,32,0.4); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeIn 0.25s ease-out;">
+        <div style="background:#FAF8F5; width:100%; max-width:900px; border-radius:24px; box-shadow:0 24px 48px rgba(42,36,32,0.12), 0 0 0 1px rgba(138,114,76,0.1); display:flex; flex-direction:column; max-height:90vh; overflow:hidden;">
+          
+          <div style="padding:24px 32px; background:linear-gradient(to right, #FAF8F5, #FFF); display:flex; justify-content:space-between; align-items:center; position:relative;">
+            <h3 style="margin:0; font-size:20px; color:#2A2420; font-weight:800; letter-spacing:-0.3px;">Chi tiết Đơn giá trị 0đ</h3>
+            <button onclick="document.getElementById('modal-don-khong-dong').remove()" style="background:rgba(138,114,76,0.08); border:none; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#8A724C; transition:all 0.2s;" onmouseover="this.style.background='rgba(138,114,76,0.15)'" onmouseout="this.style.background='rgba(138,114,76,0.08)'">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          
+          <div style="padding:0 32px 16px 32px; background:linear-gradient(to right, #FAF8F5, #FFF);">
+            <div style="background:linear-gradient(135deg, #FFEBEE, #FDE0E4); border-radius:12px; padding:12px 16px; display:flex; gap:12px; align-items:flex-start; box-shadow:inset 0 0 0 1px rgba(229,115,115,0.3);">
+              <div style="color:#C62828; margin-top:2px;">
+                <span style="font-size:16px;">⚠️</span>
+              </div>
+              <div style="font-size:13px; color:#B71C1C; line-height:1.5;">Rà soát các đơn giá trị 0đ để đảm bảo không bỏ sót doanh thu (tránh trường hợp sale đổi trạng thái hủy để giấu doanh thu).</div>
+            </div>
+          </div>
+          
+          <div style="flex:1; overflow-y:auto; padding:0 32px 16px 32px; background:#FFF;">
+            <table style="width:100%; border-collapse:collapse; font-size:14px;">
+              <thead style="position:sticky; top:0; z-index:2; background:#FFF;">
+                <tr>
+                  <th style="padding:12px 24px; text-align:left; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Mã đơn</th>
+                  <th style="padding:12px 24px; text-align:left; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Khách hàng</th>
+                  <th style="padding:12px 24px; text-align:left; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Sale phụ trách</th>
+                  <th style="padding:12px 24px; text-align:right; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Ngày lên đơn</th>
+                  <th style="padding:12px 24px; text-align:right; font-weight:600; color:#8A724C; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; border-bottom:1px solid rgba(138,114,76,0.15);">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? htmlRows : emptyHtml}
+              </tbody>
+            </table>
+          </div>
+          
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  },
+
   _renderDoanhThuContent(filterType = 'month', customFrom = '', customTo = '', fNganh = 'all', fSale = 'all', fKh = 'all', fItem = 'all', fLoai = 'all') {
     const content = document.getElementById('page-content');
     const today = new Date();
@@ -2424,15 +2610,35 @@ const App = {
     let tongHoan = 0;
     let tongTip = 0;
     let soGiaoDich = 0;
+    
+    let trendMap = {}; // Lưu dữ liệu biểu đồ xu hướng theo ngày lên đơn
+
+    let tongThuDonKy = 0;
+    let tongThuNoCu = 0;
+    let congNo = 0;
+    let soDon = 0;
 
     const dailyMap = {};
     this._doanhThuCurrentFilteredData = [];
 
+    const parseDateStr = (dateStr) => {
+      if (!dateStr) return null;
+      const parts = dateStr.trim().split('/');
+      if (parts.length < 2) return null;
+      let d = 1, m, y;
+      if (parts.length === 2) { 
+         d = 1; m = parseInt(parts[0], 10); y = parseInt(parts[1], 10);
+      } else {
+         d = parseInt(parts[0], 10); m = parseInt(parts[1], 10); y = parseInt(parts[2], 10);
+      }
+      if (isNaN(y) || y < 1970) y = today.getFullYear();
+      if (isNaN(m) || m < 1 || m > 12) return null;
+      return new Date(y, m - 1, d);
+    };
+
     this._doanhThuData.forEach(r => {
-      // Filter by date
       if (r.parsedDate < startDate || r.parsedDate > endDate) return;
 
-      // Filter combinations
       if (fNganh !== 'all' && r.nganh !== fNganh) return;
       if (fSale !== 'all' && r.sale_phu_trach !== fSale) return;
       if (fKh !== 'all' && r.ma_kh !== fKh) return;
@@ -2440,12 +2646,20 @@ const App = {
       if (fLoai !== 'all' && r.loai !== fLoai) return;
 
       const tien = r.so_tien;
-      tongDoanhThu += tien;
-      soGiaoDich++;
+      const isTip = r.loai && r.loai.toLowerCase() === 'tip';
 
-      if (tien > 0) tongThu += tien;
       if (tien < 0) tongHoan += Math.abs(tien);
-      if (r.loai && r.loai.toLowerCase() === 'tip') tongTip += tien;
+      if (isTip) tongTip += tien;
+
+      if (tien > 0 && !isTip) {
+         const donHang = (this._doanhThuDonHangList || []).find(d => d.ma_don === r.ma_don);
+         if (donHang) {
+            const ngayLenDonDate = parseDateStr(donHang.ngay_len_don || donHang.ngay_tao || '');
+            if (ngayLenDonDate && ngayLenDonDate < startDate) {
+               tongThuNoCu += tien;
+            }
+         }
+      }
 
       const dateStr = r.ngay || 'Chưa rõ';
       if (!dailyMap[dateStr]) {
@@ -2455,6 +2669,60 @@ const App = {
       dailyMap[dateStr].count += 1;
       this._doanhThuCurrentFilteredData.push(r);
     });
+
+    this._zeroValueOrdersFiltered = [];
+    (this._doanhThuDonHangList || []).forEach(don => {
+       if (fNganh !== 'all' && (don.nganh || '') !== fNganh) return;
+       if (fSale !== 'all' && (don.sale_phu_trach || '') !== fSale) return;
+       if (fKh !== 'all' && (don.ma_kh || '') !== fKh) return;
+       if (fItem !== 'all' && (don.item || '') !== fItem) return;
+
+       const ngayLenDonDate = parseDateStr(don.ngay_len_don || don.ngay_tao || '');
+       if (!ngayLenDonDate) return;
+
+       if (ngayLenDonDate >= startDate && ngayLenDonDate <= endDate) {
+          soDon++;
+          const soPhaiThu = this._tinhSoPhaiThu(don);
+          tongDoanhThu += soPhaiThu;
+
+          let daThucThuThatSu = 0;
+          let daThucThuFilter = 0;
+          const gdCuaDon = this._doanhThuData.filter(r => r.ma_don === don.ma_don);
+          gdCuaDon.forEach(r => {
+             const isTip = r.loai && r.loai.toLowerCase() === 'tip';
+             if (r.so_tien > 0 && !isTip) {
+                daThucThuThatSu += r.so_tien;
+                if (fLoai === 'all' || r.loai === fLoai) {
+                   daThucThuFilter += r.so_tien;
+                }
+             }
+          });
+          
+          tongThuDonKy += daThucThuFilter;
+
+          let no = soPhaiThu - daThucThuThatSu;
+          if (no > 0) congNo += no;
+
+          if (don.da_an !== 'yes' && this._parseCurrency(don.tong_gia_tri) <= 0) {
+             if (!this._zeroValueOrdersFiltered) this._zeroValueOrdersFiltered = [];
+             this._zeroValueOrdersFiltered.push(don);
+          }
+          
+          if (don.da_an !== 'yes') {
+             const d = ngayLenDonDate.getDate();
+             const m = ngayLenDonDate.getMonth() + 1;
+             const y = ngayLenDonDate.getFullYear();
+             const dateStr = `${d < 10 ? '0'+d : d}/${m < 10 ? '0'+m : m}/${y}`;
+             if (!trendMap[dateStr]) {
+                trendMap[dateStr] = { date: dateStr, parsedDate: ngayLenDonDate, total: 0 };
+             }
+             trendMap[dateStr].total += soPhaiThu;
+          }
+       }
+    });
+
+    tongThu = tongThuDonKy + tongThuNoCu;
+    soGiaoDich = soDon;
 
     // Sắp xếp ngày từ mới nhất đến cũ nhất (mới nhất ở trên)
     const dailyArr = Object.values(dailyMap).sort((a, b) => b.parsedDate - a.parsedDate);
@@ -2479,7 +2747,7 @@ const App = {
     const resetFilterClick = `App._renderDoanhThuContent('month', '', '', 'all', 'all', 'all', 'all', 'all')`;
 
     content.innerHTML = `
-      <div style="max-width: 1200px; margin: 0 auto; display:flex; flex-direction:column; gap:24px;">
+      <div id="dt-content-wrap" style="max-width: 1200px; margin: 0 auto; display:flex; flex-direction:column; gap:24px;">
         
         <!-- BỘ LỌC -->
         <div style="background:var(--clr-card); padding:20px; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; gap:16px;">
@@ -2491,16 +2759,18 @@ const App = {
               <button style="${filterType === 'quarter' ? btnActiveStyle : btnStyle}" onclick="App._renderDoanhThuContent('quarter', '', '', '${this._escHtml(fNganh)}', '${this._escHtml(fSale)}', '${this._escHtml(fKh)}', '${this._escHtml(fItem)}', '${this._escHtml(fLoai)}')">Quý này</button>
               <button style="${filterType === 'year' ? btnActiveStyle : btnStyle}" onclick="App._renderDoanhThuContent('year', '', '', '${this._escHtml(fNganh)}', '${this._escHtml(fSale)}', '${this._escHtml(fKh)}', '${this._escHtml(fItem)}', '${this._escHtml(fLoai)}')">Năm nay</button>
             </div>
-            <div style="display:flex; gap:12px; align-items:center;">
-              <span style="font-size:14px; font-weight:500;">Hoặc chọn ngày:</span>
-              <div class="custom-date-wrapper" style="width:140px;">
-                <input type="date" onclick="this.showPicker()" id="dt-from" class="form-input custom-date-input" style="width:100%; padding:6px 10px; background:transparent;" value="${customFrom}">
-                <svg class="custom-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              </div>
-              <span style="color:var(--clr-text-muted);">-</span>
-              <div class="custom-date-wrapper" style="width:140px;">
-                <input type="date" onclick="this.showPicker()" id="dt-to" class="form-input custom-date-input" style="width:100%; padding:6px 10px; background:transparent;" value="${customTo}">
-                <svg class="custom-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+              <span style="font-size:14px; font-weight:500; width:100%;">Hoặc chọn ngày:</span>
+              <div style="display:flex; gap:8px; align-items:flex-end; flex:1 1 auto;">
+                <div style="display:flex; flex-direction:column; gap:4px; flex:1 1 0;">
+                  <label for="dt-from" style="font-size:12px; font-style:italic; color:var(--clr-text-muted);">Từ ngày</label>
+                  <input type="date" id="dt-from" class="form-input" style="width:100%; padding:6px 10px;" value="${customFrom}">
+                </div>
+                <span style="color:var(--clr-text-muted); align-self:center; padding-bottom:6px;">-</span>
+                <div style="display:flex; flex-direction:column; gap:4px; flex:1 1 0;">
+                  <label for="dt-to" style="font-size:12px; font-style:italic; color:var(--clr-text-muted);">Đến ngày</label>
+                  <input type="date" id="dt-to" class="form-input" style="width:100%; padding:6px 10px;" value="${customTo}">
+                </div>
               </div>
               <button class="btn btn-outline btn-sm" onclick="App._renderDoanhThuContent('custom', document.getElementById('dt-from').value, document.getElementById('dt-to').value, '${this._escHtml(fNganh)}', '${this._escHtml(fSale)}', '${this._escHtml(fKh)}', '${this._escHtml(fItem)}', '${this._escHtml(fLoai)}')">Lọc</button>
             </div>
@@ -2547,39 +2817,63 @@ const App = {
         </div>
 
         <!-- CHỈ SỐ TỔNG -->
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:24px;">
-          <div class="trendy-stat-card trendy-stat-1">
-            <div class="stat-label-trendy">Tổng doanh thu</div>
-            <div class="stat-num-trendy">${this._formatVND(tongDoanhThu)}</div>
-            <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+          <div style="background:linear-gradient(135deg, #EDE7F6, #F3EFFB); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
+            <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px;">Tổng doanh thu</div>
+            <div style="font-size:28px; font-weight:800; color:#2A2420;">${this._formatVND(tongDoanhThu)}</div>
           </div>
-          <div class="trendy-stat-card trendy-stat-2">
-            <div class="stat-label-trendy">Tổng thu</div>
-            <div class="stat-num-trendy">${this._formatVND(tongThu)}</div>
-            <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
+          <div style="background:linear-gradient(135deg, #FCE4EC, #FDF0F4); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
+            <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px;">Tổng thu</div>
+            <div style="font-size:28px; font-weight:800; color:#2A2420;">${this._formatVND(tongThu)}</div>
+            <div style="font-size:11px; color:var(--clr-text-muted); margin-top:8px; font-weight:500;">Đơn tháng này: ${this._formatVND(tongThuDonKy)} &middot; Thu nợ cũ: ${this._formatVND(tongThuNoCu)}</div>
           </div>
-          <div class="trendy-stat-card trendy-stat-3">
-            <div class="stat-label-trendy">Tổng hoàn</div>
-            <div class="stat-num-trendy">${this._formatVND(tongHoan)}</div>
-            <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
+          <div onclick="App._showChiTietHoan()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='none'; this.style.boxShadow='var(--shadow-sm)'" style="background:linear-gradient(135deg, #FFF0E5, #FFF6EF); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm); cursor:pointer; transition:all 0.2s;" title="Bấm xem chi tiết">
+            <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+               Tổng hoàn <span style="display:flex; align-items:center; opacity:0.6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></span>
+            </div>
+            <div style="font-size:28px; font-weight:800; color:#2A2420;">${this._formatVND(tongHoan)}</div>
           </div>
-          <div class="trendy-stat-card trendy-stat-4">
-            <div class="stat-label-trendy">Tổng tip</div>
-            <div class="stat-num-trendy">${this._formatVND(tongTip)}</div>
-            <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
+          <div style="background:linear-gradient(135deg, #FFEBEE, #FDE0E4); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
+            <div style="font-size:13px; color:#C62828; text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px;">Công nợ</div>
+            <div style="font-size:28px; font-weight:800; color:#B71C1C;">${this._formatVND(congNo)}</div>
           </div>
-          <div class="trendy-stat-card trendy-stat-1">
-            <div class="stat-label-trendy">Số giao dịch</div>
-            <div class="stat-num-trendy">${this._formatNumber(soGiaoDich)}</div>
-            <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
+          <div style="background:linear-gradient(135deg, #EDE7F6, #F3EFFB); padding:20px; border-radius:20px; box-shadow:var(--shadow-sm);">
+            <div style="font-size:13px; color:var(--clr-text-muted); text-transform:uppercase; font-weight:600; letter-spacing:0.5px; margin-bottom:8px;">Số đơn</div>
+            <div style="font-size:28px; font-weight:800; color:#2A2420;">${this._formatNumber(soDon)}</div>
           </div>
         </div>
 
+        ${this.session?.role === 'admin' ? (this._zeroValueOrdersFiltered.length > 0 ? `
+        <!-- CẢNH BÁO ĐƠN 0Đ (CÓ LỖI) -->
+        <div onclick="App._showDonKhongDong()" style="background:linear-gradient(135deg, #FFEBEE, #FFCDD2); padding:16px 20px; border-radius:16px; border:1px solid #EF9A9A; box-shadow:var(--shadow-sm); cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:all 0.2s; margin-bottom:16px;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='none'; this.style.boxShadow='var(--shadow-sm)'" title="Bấm để xem danh sách">
+           <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:24px;">⚠️</span>
+              <div>
+                 <div style="font-size:16px; font-weight:700; color:#B71C1C;">Cảnh báo: Phát hiện ${this._zeroValueOrdersFiltered.length} đơn có giá trị 0đ</div>
+                 <div style="font-size:13px; color:#C62828; margin-top:2px;">Bấm vào đây để rà soát danh sách, đề phòng sale giấu doanh thu.</div>
+              </div>
+           </div>
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B71C1C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+        ` : `
+        <!-- CẢNH BÁO ĐƠN 0Đ (AN TOÀN) -->
+        <div onclick="App._showDonKhongDong()" style="background:linear-gradient(135deg, #E8F5E9, #C8E6C9); padding:16px 20px; border-radius:16px; border:1px solid #A5D6A7; box-shadow:var(--shadow-sm); cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:all 0.2s; margin-bottom:16px;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.transform='none'; this.style.boxShadow='var(--shadow-sm)'" title="An toàn">
+           <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:24px; color:#2E7D32;">✓</span>
+              <div>
+                 <div style="font-size:16px; font-weight:700; color:#2E7D32;">Không phát hiện đơn giá trị 0đ nào</div>
+                 <div style="font-size:13px; color:#388E3C; margin-top:2px;">Kỳ này không có dấu hiệu sale giấu doanh thu. (Có thể bấm để xem danh sách trống)</div>
+              </div>
+           </div>
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+        `) : ''}
+
         <!-- BIỂU ĐỒ -->
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:16px; margin-bottom:16px;">
+        <div id="dt-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap:16px; margin-bottom:16px;">
           <!-- Biểu đồ đường (Trend) -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px; display:flex; flex-direction:column;">
-            <h3 style="margin:0 0 16px 0; font-size:16px; font-weight:600;">Xu hướng Doanh thu</h3>
+            <h3 style="margin:0 0 16px 0; font-size:16px; font-weight:600;">Xu hướng Doanh số theo ngày</h3>
             <div style="flex-grow:1; min-height:300px; position:relative; display:flex; justify-content:center; align-items:center;">
               <canvas id="chart-trend"></canvas>
               <div id="chart-trend-empty" style="display:none; color:var(--clr-text-muted); font-size:14px; position:absolute;">Không có dữ liệu để vẽ biểu đồ</div>
@@ -2636,7 +2930,8 @@ const App = {
       </div>
     `;
 
-    setTimeout(() => this._initDoanhThuCharts(dailyArr), 100);
+    const trendArr = Object.values(trendMap).sort((a, b) => b.parsedDate - a.parsedDate);
+    setTimeout(() => this._initDoanhThuCharts(trendArr), 100);
   },
 
   _initDoanhThuCharts(dailyArr) {
@@ -2661,43 +2956,42 @@ const App = {
         const chartData = [...dailyArr].reverse();
         const labels = chartData.map(r => r.date.substring(0, 5)); 
 
-        const makeGrad = (c, r, g, b, alpha = 0.35) => {
-          if (!c.chart.chartArea) return `rgba(${r},${g},${b},${alpha})`;
-          const ctx = c.chart.ctx;
-          const area = c.chart.chartArea;
-          const gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
-          gradient.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
-          gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
-          return gradient;
-        };
+        const ctx = canvasTrend.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvasTrend.parentElement.offsetHeight || 300);
+        gradient.addColorStop(0, 'rgba(183, 168, 143, 0.5)'); // #B7A88F
+        gradient.addColorStop(1, 'rgba(183, 168, 143, 0.0)');
 
         this._doanhThuCharts.trend = new Chart(canvasTrend, {
           type: 'line',
           data: {
             labels: labels,
             datasets: [{
-              label: 'Doanh thu (VNĐ)',
+              label: 'Doanh số (VNĐ)',
               data: chartData.map(r => r.total),
-              borderColor: '#8C7355',
-              backgroundColor: (c) => makeGrad(c, 140, 115, 85),
-              borderWidth: 2.5,
+              borderColor: '#B7A88F',
+              backgroundColor: gradient,
+              borderWidth: 2,
               tension: 0.4,
               fill: true,
-              pointBackgroundColor: '#8C7355',
-              pointRadius: 3,
+              pointBackgroundColor: '#B7A88F',
             }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
+            plugins: { 
               legend: { display: false },
-              tooltip: { callbacks: { label: (c) => Number(c.raw).toLocaleString('vi-VN') + ' đ' } }
+              tooltip: {
+                callbacks: {
+                  title: function() { return ''; },
+                  label: function(context) {
+                    let value = context.raw || 0;
+                    return 'Doanh số ngày ' + (context.label || '') + ': ' + Number(value).toLocaleString('vi-VN') + ' đ';
+                  }
+                }
+              }
             },
-            scales: {
-              x: { grid: { display: false }, ticks: { color: '#9E8E82', font: { size: 11 } } },
-              y: { beginAtZero: true, grid: { color: 'rgba(100,80,60,0.03)', drawBorder: false }, ticks: { color: '#9E8E82', font: { size: 11 } } }
-            }
+            scales: { y: { beginAtZero: true } }
           }
         });
       }
@@ -2757,26 +3051,22 @@ const App = {
     canvasPie.style.display = 'block';
     emptyPie.style.display = 'none';
 
-    // Bảng màu Beige 
-    const colors = ['#8C7355', '#B7A88F', '#D8CBB8', '#EDE4D6', '#A68B6A', '#C9BAA3', '#E6DBCC', '#735D43'];
-
     this._doanhThuCharts.pie = new Chart(canvasPie, {
-      type: 'doughnut',
+      type: 'bar',
       data: {
         labels: keys,
         datasets: [{
           data: values,
-          backgroundColor: colors,
-          borderWidth: 2,
-          borderColor: 'rgba(255,255,255,0.7)',
-          hoverOffset: 8
+          backgroundColor: '#B7A88F',
+          borderRadius: 4
         }]
       },
       options: {
+        indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { position: 'right', labels: { color: '#6B5E52', font: { size: 12 }, boxWidth: 12, padding: 14 } },
+          legend: { display: false },
           tooltip: {
             callbacks: {
               label: (context) => {
@@ -2786,8 +3076,7 @@ const App = {
               }
             }
           }
-        },
-        cutout: '60%'
+        }
       }
     });
   },
@@ -4329,29 +4618,34 @@ const App = {
   // ==========================================
   async renderKeoDoanhThuPixelPage() {
     const content = document.getElementById('page-content');
-    content.style.padding = '24px';
+    content.style.padding = '12px';
     content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:80px 0;flex-direction:column;gap:16px;">
       <div class="spinner" style="width:32px;height:32px;border-width:3px;border-color:rgba(138,114,76,0.2);border-top-color:var(--clr-accent);"></div>
-      <p style="font-size:var(--font-size-sm);color:var(--clr-text-muted);">Đang tải dữ liệu Kéo doanh thu Pixel...</p>
+      <p style="font-size:var(--font-size-sm);color:var(--clr-text-muted);">Đang tải dữ liệu doanh thu Pixel...</p>
     </div>`;
 
     try {
+      // Đọc ĐÚNG các file gốc của app PIXEL:
+      //  - GIAO_DICH_TIEN, TIEN_DON  -> file TAI-CHINH  (định tuyến tự động)
+      //  - DON_HANG, DANH_MUC_*      -> file crm-data   (chỉ định rõ OPERATION_SPREADSHEET_ID)
+      // DON_HANG đọc TOÀN BỘ cột (không giới hạn A:T) để lấy được cột da_an.
       const [gdData, donData, danhMucNganh, danhMucItem, tienDonData] = await Promise.all([
-        this._readSheet(this.session.accessToken, CONFIG.SHEETS.GIAO_DICH_TIEN, 'A:E'), // Đọc từ Tài Chính PXD
-        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG, 'A:T', CONFIG.OPERATION_SPREADSHEET_ID), // Đọc từ Vận Hành PXD
-        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DANH_MUC_NGANH, '', CONFIG.OPERATION_SPREADSHEET_ID), // Đọc từ Vận Hành PXD
-        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DANH_MUC_ITEM, '', CONFIG.OPERATION_SPREADSHEET_ID), // Đọc từ Vận Hành PXD
-        this._readSheet(this.session.accessToken, CONFIG.SHEETS.TIEN_DON, 'A:B').catch(() => []) // Đọc từ Tài Chính PXD
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.GIAO_DICH_TIEN, 'A:E'),
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG, '', CONFIG.OPERATION_SPREADSHEET_ID),
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DANH_MUC_NGANH, '', CONFIG.OPERATION_SPREADSHEET_ID),
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DANH_MUC_ITEM, '', CONFIG.OPERATION_SPREADSHEET_ID),
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.TIEN_DON, 'A:B').catch(() => [])
       ]);
 
-      this._keoDoanhThuData = gdData || [];
-      const donHangList = donData || [];
+      this._doanhThuData = gdData || [];
+      const donHangList = (donData || []).filter(d => d.da_an !== 'yes');
+      this._doanhThuDonHangList = donHangList;
       const tienDonList = tienDonData || [];
-      
+
       const tienDonMap = {};
       tienDonList.forEach(row => { if (row.ma_don) tienDonMap[row.ma_don] = row.tong_gia_tri; });
       donHangList.forEach(d => { if (tienDonMap[d.ma_don] !== undefined) d.tong_gia_tri = tienDonMap[d.ma_don]; });
-      
+
       const donMap = {};
       donHangList.forEach(d => {
         if (d.ma_don) {
@@ -4368,7 +4662,10 @@ const App = {
       const uniqueKh = new Set();
       const uniqueLoai = new Set();
 
-      this._keoDoanhThuData.forEach(r => {
+      this._doanhThuData = this._doanhThuData.filter(r => {
+        const donInfo = donMap[r.ma_don];
+        if (!donInfo) return false; // Bỏ giao dịch của đơn đã ẩn hoặc không tồn tại
+
         if (r.ngay) {
           const [d, m, y] = r.ngay.split('/');
           r.parsedDate = new Date(y, m - 1, d);
@@ -4377,7 +4674,6 @@ const App = {
         }
         r.so_tien = this._parseCurrency(r.so_tien);
 
-        const donInfo = donMap[r.ma_don] || {};
         r.nganh = donInfo.nganh;
         r.sale_phu_trach = donInfo.sale_phu_trach;
         r.ma_kh = donInfo.ma_kh;
@@ -4386,9 +4682,11 @@ const App = {
         if (r.sale_phu_trach) uniqueSale.add(r.sale_phu_trach);
         if (r.ma_kh) uniqueKh.add(r.ma_kh);
         if (r.loai) uniqueLoai.add(r.loai);
+
+        return true;
       });
 
-      this._keoDoanhThuFilters = {
+      this._doanhThuFilters = {
         nganh: (danhMucNganh || []).map(r => r.ten_nganh).filter(Boolean),
         sale: Array.from(uniqueSale).sort(),
         kh: Array.from(uniqueKh).sort(),
@@ -4396,7 +4694,7 @@ const App = {
         loai: Array.from(uniqueLoai).sort()
       };
 
-      this._renderKeoDoanhThuPixelContent('month');
+      this._renderDoanhThuContent('month');
     } catch (e) {
       console.error(e);
       content.innerHTML = `<div style="color:var(--clr-error); padding:24px;">Lỗi tải dữ liệu: ${this._escHtml(e.message)}</div>`;
