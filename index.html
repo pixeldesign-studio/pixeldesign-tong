@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="PIXELDESIGN CRM — Hệ thống quản lý nội bộ Studio Thiết Kế Cao Cấp" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PIXELDESIGN TỔNG</title>
+
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" />
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="styles.css?v=20260828-1" />
+
+  <!-- Lucide Icons — Modern outline icons (rounded, thin stroke) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+
+  <!-- Favicon inline SVG -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%238A724C'/><text x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-size='18' fill='white' font-family='Manrope,Inter,sans-serif' font-weight='800'>P</text></svg>" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════
+       LOGIN SCREEN
+  ══════════════════════════════════════════════════════════ -->
+  <div id="login-screen">
+    <div class="login-card">
+
+      <!-- Brand -->
+      <div class="login-brand">
+        <div class="login-logo">
+          <!-- Pixel/Diamond icon -->
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h1>PIXEL<span>DESIGN</span> TỔNG</h1>
+        <p>Hệ thống Quản trị Tổng</p>
+      </div>
+
+      <!-- Divider -->
+      <div class="login-divider">
+        <span>Hệ thống nội bộ</span>
+      </div>
+
+      <!-- Description -->
+      <p class="login-desc">
+        Đăng nhập bằng tài khoản Google được cấp phép.<br />
+        Chỉ nhân sự trong hệ thống mới có thể truy cập.
+      </p>
+
+      <!-- Sign In Button -->
+      <button id="login-btn" onclick="App.signIn()">
+        <svg viewBox="0 0 24 24" class="google-icon">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Đăng nhập với Google
+      </button>
+
+      <!-- Error -->
+      <div id="login-error" class="hidden"></div>
+
+      <!-- Footer -->
+      <div class="login-footer">
+        Chỉ dành cho nhân sự PIXELDESIGN.<br />
+        Liên hệ Admin nếu không thể đăng nhập.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       APP SHELL (hidden until authenticated)
+  ══════════════════════════════════════════════════════════ -->
+  <div id="app-shell" class="hidden">
+
+    <!-- ─── Sidebar ──────────────────────────────────────── -->
+    <aside id="sidebar">
+
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="sidebar-logo-text">
+          <div class="app-name">PIXEL<span>DESIGN</span> TỔNG</div>
+          <div class="app-tag">Hệ thống Admin</div>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav" role="navigation" aria-label="Menu chính">
+
+        <div class="nav-section-label">Báo cáo & Phân tích</div>
+
+        <!-- Doanh thu Etsy -->
+        <div class="nav-item"
+             id="nav-doanh-thu-etsy"
+             data-page="doanh-thu-etsy"
+             role="button"
+             tabindex="0"
+             onclick="App.navigateTo('doanh-thu-etsy')">
+          <span class="nav-icon">
+            <!-- Lucide: trending-up (doanh thu) -->
+            <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+          </span>
+          <span class="nav-label">Doanh thu Etsy</span>
+        </div>
+
+        <!-- Kéo doanh thu Pixel -->
+        <div class="nav-item"
+             id="nav-keo-doanh-thu-pixel"
+             data-page="keo-doanh-thu-pixel"
+             role="button"
+             tabindex="0"
+             onclick="App.navigateTo('keo-doanh-thu-pixel')">
+          <span class="nav-icon">
+            <!-- Lucide: banknote (doanh thu pixel) -->
+            <svg viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
+          </span>
+          <span class="nav-label">Kéo doanh thu Pixel</span>
+        </div>
+
+        <!-- Phân tích tổng -->
+        <div class="nav-item"
+             id="nav-phan-tich-tong"
+             data-page="phan-tich-tong"
+             role="button"
+             tabindex="0"
+             onclick="App.navigateTo('phan-tich-tong')">
+          <span class="nav-icon">
+            <!-- Lucide: bar-chart-3 (biểu đồ phân tích) -->
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+          </span>
+          <span class="nav-label">Phân tích tổng</span>
+        </div>
+
+        <!-- Tài chính tổng -->
+        <div class="nav-item"
+             id="nav-tai-chinh-tong"
+             data-page="tai-chinh-tong"
+             role="button"
+             tabindex="0"
+             onclick="App.navigateTo('tai-chinh-tong')">
+          <span class="nav-icon">
+            <!-- Lucide: wallet (ví tiền / tài chính) -->
+            <svg viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
+          </span>
+          <span class="nav-label">Tài chính tổng</span>
+        </div>
+
+        <!-- Chi lương & Hiệu suất nhân sự -->
+        <div class="nav-item"
+             id="nav-hieu-suat-nhan-su"
+             data-page="hieu-suat-nhan-su"
+             role="button"
+             tabindex="0"
+             onclick="App.navigateTo('hieu-suat-nhan-su')">
+          <span class="nav-icon">
+            <!-- Lucide: bar-chart (chi lương) -->
+            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </span>
+          <span class="nav-label">Chi lương & Hiệu suất</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+        <div class="nav-section-label">Liên kết ứng dụng</div>
+
+        <!-- Links -->
+        <a class="nav-item" href="https://crm.pixeldesign.vn" target="_blank" style="text-decoration: none; color: inherit;">
+          <span class="nav-icon">
+            <!-- Lucide: external-link (liên kết ngoài) -->
+            <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </span>
+          <span class="nav-label">Mở app PIXELDESIGN</span>
+        </a>
+        <a class="nav-item" href="https://etsy.pixeldesign.vn" target="_blank" style="text-decoration: none; color: inherit;">
+          <span class="nav-icon">
+            <!-- Lucide: external-link -->
+            <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </span>
+          <span class="nav-label">Mở app ETSY</span>
+        </a>
+
+
+
+      </nav>
+
+      <!-- User Profile -->
+      <div class="sidebar-user" onclick="App.showUserMenu(event)" title="Tùy chọn người dùng">
+        <div class="user-avatar" id="user-avatar">
+          <span>?</span>
+        </div>
+        <div class="user-info">
+          <div class="user-name" id="user-name">Đang tải...</div>
+          <div class="user-role-badge" id="user-role"></div>
+        </div>
+        <button class="logout-btn"
+                id="logout-btn"
+                onclick="event.stopPropagation(); App.signOut()"
+                title="Đăng xuất"
+                aria-label="Đăng xuất">
+          <svg viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- ─── Main Content ──────────────────────────────────── -->
+    <main id="main-content">
+      <!-- Nút mở menu trên Mobile -->
+      <div id="mobile-top-bar">
+        <button id="mobile-menu-btn" aria-label="Mở menu">☰</button>
+      </div>
+      <div id="sidebar-overlay"></div>
+
+      <!-- Page Header -->
+      <header class="page-header">
+        <div class="page-header-left">
+          <h1 class="page-title" id="page-title">Lên đơn</h1>
+          <p class="page-subtitle" id="page-subtitle">Tạo và quản lý đơn hàng</p>
+        </div>
+        <div class="page-actions" id="page-actions">
+          <!-- Actions injected per page -->
+        </div>
+      </header>
+
+      <!-- Page Body -->
+      <div class="page-body" id="page-content">
+        <!-- Content injected by JS -->
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ─── Toast Container ──────────────────────────────────── -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SCRIPTS (order matters)
+  ══════════════════════════════════════════════════════════ -->
+
+  <!-- 1. Config -->
+  <script src="config.js?v=20260828-1"></script>
+
+  <!-- 2. Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- 2. Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" id="gsi-script" async defer></script>
+
+  <!-- 3. App Logic -->
+  <script src="app.js?v=20260828-1"></script>
+
+  <!-- Script xử lý Mobile Menu -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const mobileBtn = document.getElementById('mobile-menu-btn');
+      const sidebar   = document.getElementById('sidebar');
+      const overlay   = document.getElementById('sidebar-overlay');
+      if (mobileBtn && sidebar && overlay) {
+        mobileBtn.addEventListener('click', () => {
+          sidebar.classList.add('open'); overlay.classList.add('open');
+        });
+        overlay.addEventListener('click', () => {
+          sidebar.classList.remove('open'); overlay.classList.remove('open');
+        });
+        sidebar.querySelectorAll('.nav-item').forEach(item => {
+          item.addEventListener('click', () => {
+            sidebar.classList.remove('open'); overlay.classList.remove('open');
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>
