@@ -6096,10 +6096,133 @@ const App = {
               <div id="hs-insight-text" style="text-align:center; font-style:italic; color:var(--clr-text-muted); margin-top:12px; font-size:13px;"></div>
            </div>
         </div>
+
+        <!-- XU HUONG 6 THANG -->
+        <div style="background:var(--clr-card); padding:20px; border-radius:12px; box-shadow:var(--shadow-sm); border:1px solid var(--clr-border);">
+           <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+              <h3 style="margin:0; font-size:16px; color:var(--clr-text);">Xu hướng 6 tháng — lương chiếm bao nhiêu % giá trị mang lại</h3>
+              <div style="display:flex; align-items:center; gap:8px; font-size:13px;">
+                 <span style="color:var(--clr-text-muted);">Ngưỡng cảnh báo</span>
+                 <input type="number" id="hs-nguong" value="50" min="1" max="200" step="5"
+                        onchange="App._veXuHuongLuong()"
+                        style="width:70px; padding:6px 8px; border:1px solid var(--clr-border); border-radius:8px; text-align:right;">
+                 <span style="color:var(--clr-text-muted);">%</span>
+              </div>
+           </div>
+           <p style="margin:0 0 14px 0; font-size:12.5px; color:var(--clr-text-muted); line-height:1.6;">
+              Mỗi ô là <b>lương ÷ giá trị người đó mang lại</b> trong tháng. Số càng thấp càng hiệu quả.
+              Ô đỏ là vượt ngưỡng. Cột cuối gắn cờ khi <b>vượt ngưỡng 3 tháng liên tiếp</b> — lúc đó mới nên bàn lại lương hoặc KPI,
+              chứ một tháng xấu thì chưa nói lên điều gì.
+           </p>
+           <div id="hs-xu-huong" style="overflow-x:auto;"></div>
+        </div>
       </div>
     `;
 
     await this.loadHieuSuatNhanSu();
+  },
+
+  /**
+   * Bang xu huong 6 thang: luong chiem bao nhieu % gia tri nguoi do mang lai.
+   * Dung lai du lieu da tai o loadHieuSuatNhanSu, khong doc them Sheets.
+   */
+  _veXuHuongLuong() {
+    const box = document.getElementById('hs-xu-huong');
+    if (!box || !this._hsDuLieu) return;
+    const { nvStats, donHangRows, tienDonRows, diemDesignerRows, tYear, tMonth } = this._hsDuLieu;
+    const nguong = parseFloat(document.getElementById('hs-nguong')?.value) || 50;
+
+    // 6 thang gan nhat, ket thuc o thang dang chon
+    const thangs = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(tYear, tMonth - 1 - i, 1);
+      thangs.push({ m: d.getMonth() + 1, y: d.getFullYear() });
+    }
+
+    const hopThang = (chuoi, m, y) => {
+      if (!chuoi) return false;
+      const parts = String(chuoi).trim().split('/');
+      if (parts.length < 2) return false;
+      const mm = parseInt(parts[1], 10);
+      const yy = parts.length === 3 ? parseInt(parts[2], 10) : y;
+      return mm === m && yy === y;
+    };
+
+    const tienDonMap = {};
+    (tienDonRows || []).forEach(r => { if (r.ma_don) tienDonMap[r.ma_don] = this._parseCurrency(r.tong_gia_tri); });
+    const donMap = {};
+    (donHangRows || []).forEach(d => { donMap[d.ma_don] = d; });
+
+    const luongThangCua = (luongRows, m, y) => {
+      const row = (luongRows || []).find(r => {
+        const t = (r.thang || '').trim();
+        if (!t) return false;
+        const q = t.replace('-', '/').split('/');
+        if (q.length === 2) return parseInt(q[0], 10) === m && parseInt(q[1], 10) === y;
+        if (q.length === 3) return parseInt(q[1], 10) === m && parseInt(q[2], 10) === y;
+        return false;
+      });
+      return row ? (parseFloat(row.tong_luong) || 0) : 0;
+    };
+
+    const giaTriCua = (nv, m, y) => {
+      if (nv.loai === 'sale') {
+        return (donHangRows || []).filter(d => {
+          if (d.da_an === 'yes') return false;
+          if ((d.sale_phu_trach || '').trim().toLowerCase() !== nv.hoTen.toLowerCase()) return false;
+          const tt = (d.trang_thai || '').toLowerCase();
+          if (tt.includes('hủy') || tt.includes('huy')) return false;
+          return hopThang((d.ngay_thu_du || '').trim(), m, y);
+        }).reduce((sum, d) => sum + (tienDonMap[d.ma_don] || 0), 0);
+      }
+      const diem = (diemDesignerRows || []).filter(d => {
+        if ((d.ten_designer || '').trim().toLowerCase() !== nv.hoTen.toLowerCase()) return false;
+        const don = donMap[d.ma_don];
+        if (!don || don.da_an === 'yes') return false;
+        return hopThang((don.ngay_duyet_mau || '').trim(), m, y);
+      }).reduce((sum, d) => sum + (parseFloat(d.diem) || 0), 0);
+      return diem * (nv.donGiaDiem || 500000);
+    };
+
+    const oTh = 'padding:10px 12px; font-weight:600; font-size:12.5px; color:var(--clr-text-muted); border-bottom:1px solid var(--clr-border-light); white-space:nowrap;';
+    let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;"><thead><tr>' +
+               `<th style="${oTh} text-align:left;">Nhân viên</th>` +
+               thangs.map(t => `<th style="${oTh} text-align:center;">${String(t.m).padStart(2,'0')}/${t.y}</th>`).join('') +
+               `<th style="${oTh} text-align:center;">Cảnh báo</th></tr></thead><tbody>`;
+
+    (nvStats || []).forEach(nv => {
+      const oCells = thangs.map(t => {
+        const luong = luongThangCua(nv.luongRows, t.m, t.y);
+        const giaTri = giaTriCua(nv, t.m, t.y);
+        if (!luong && !giaTri) return { txt: '—', pct: null };
+        if (!giaTri) return { txt: 'chưa có giá trị', pct: Infinity };
+        return { txt: Math.round(luong / giaTri * 100) + '%', pct: (luong / giaTri * 100) };
+      });
+
+      // Canh bao: 3 thang GAN NHAT lien tiep deu vuot nguong
+      const baGanNhat = oCells.slice(-3);
+      const canhBao = baGanNhat.length === 3 && baGanNhat.every(c => c.pct !== null && c.pct > nguong);
+
+      html += `<tr><td style="padding:10px 12px; border-bottom:1px solid var(--clr-border-light); font-weight:600; white-space:nowrap;">` +
+              `${this._escHtml(nv.hoTen)}<div style="font-size:11px; font-weight:400; color:var(--clr-text-muted);">${nv.loai === 'sale' ? 'Sale' : 'Designer'}</div></td>`;
+      oCells.forEach(c => {
+        let mau = 'var(--clr-text-muted)', nen = 'transparent', dam = '500';
+        if (c.pct !== null) {
+          if (c.pct > nguong) { mau = '#B4453C'; nen = 'rgba(180,69,60,0.10)'; dam = '700'; }
+          else { mau = '#3B7A57'; nen = 'rgba(59,122,87,0.10)'; dam = '700'; }
+        }
+        html += `<td style="padding:10px 12px; border-bottom:1px solid var(--clr-border-light); text-align:center; color:${mau}; background:${nen}; font-weight:${dam}; white-space:nowrap;">${c.txt}</td>`;
+      });
+      html += `<td style="padding:10px 12px; border-bottom:1px solid var(--clr-border-light); text-align:center;">` +
+              (canhBao ? '<span style="background:#B4453C; color:#fff; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap;">3 tháng liền</span>' : '') +
+              '</td></tr>';
+    });
+
+    html += '</tbody></table>';
+    if (!nvStats || nvStats.length === 0) {
+      html = '<div style="padding:24px; text-align:center; color:var(--clr-text-muted);">Chưa có nhân sự nào trong cấu hình lương.</div>';
+    }
+    box.innerHTML = html;
   },
 
   async loadHieuSuatNhanSu() {
@@ -6219,10 +6342,14 @@ const App = {
               giaTriMangLai = tongDiem * donGia;
            }
 
-           nvStats.push({ hoTen, loai, luongThang, giaTriMangLai });
+           nvStats.push({ hoTen, loai, luongThang, giaTriMangLai, luongRows, donGiaDiem: this._parseCurrency(nv.don_gia_diem) || 500000 });
         }
 
         // Update UI summary
+        // Luu lai de ve bang xu huong 6 thang (khong phai doc them lan nao)
+        this._hsDuLieu = { nvStats, donHangRows, tienDonRows, diemDesignerRows, donHopLeHS, tYear, tMonth };
+        this._veXuHuongLuong();
+
         document.getElementById('hs-tong-luong').textContent = this._formatVND(tongChiLuong);
         document.getElementById('hs-tong-doanh-thu').textContent = this._formatVND(tongDoanhThu);
         const pt = tongDoanhThu > 0 ? (tongChiLuong / tongDoanhThu * 100) : 0;
