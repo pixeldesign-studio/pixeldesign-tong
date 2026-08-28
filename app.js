@@ -5192,7 +5192,7 @@ const App = {
     </div>`;
 
     try {
-      const [etsyRaw, pixelRaw] = await Promise.all([
+      const [etsyRaw, pixelRaw, donRaw] = await Promise.all([
         this._readSheet(this.session.accessToken, CONFIG.SHEETS.DOANH_THU_KHAC).catch((e) => {
           this._showToast(`Lỗi đọc Etsy: ${e.message}`, 'error');
           return [];
@@ -5200,8 +5200,13 @@ const App = {
         this._readSheet(this.session.accessToken, CONFIG.SHEETS.GIAO_DICH_TIEN, 'A:E').catch((e) => {
           this._showToast(`Lỗi đọc Pixel: ${e.message}`, 'error');
           return [];
-        })
+        }),
+        // Danh sach don de loai giao dich cua don da an / khong con ton tai
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG, '', CONFIG.OPERATION_SPREADSHEET_ID).catch(() => [])
       ]);
+
+      const donHopLe = {};
+      (donRaw || []).forEach(d => { if (d.ma_don && d.da_an !== 'yes') donHopLe[d.ma_don] = true; });
 
       // Xử lý dữ liệu Etsy
       let etsyRecords = etsyRaw.map((d, i) => ({
@@ -5236,13 +5241,23 @@ const App = {
       });
 
       // Gom Pixel vào _phanTichTongData
+      // Pixel: chi tinh TIEN THUC THU trong ky
+      //  - bo giao dich cua don da an / khong con ton tai
+      //  - bo tien tip (khong phai doanh thu ban hang)
+      //  - bo khoan am (hoan tien) de khong lam meo ty trong
+      // Muc nay tuong duong voi "doanh thu net" cua Etsy: tien thuc su ve.
       pixelRaw.forEach(r => {
+        if (!donHopLe[r.ma_don]) return;
+        const isTip = r.loai && r.loai.toLowerCase() === 'tip';
+        if (isTip) return;
+        const tienPixel = this._parseCurrency(r.so_tien) || 0;
+        if (tienPixel <= 0) return;
+
         let pDate = new Date(0);
         if (r.ngay) {
           const [d, m, y] = r.ngay.split('/');
           pDate = new Date(y, m - 1, d);
         }
-        const tienPixel = this._parseCurrency(r.so_tien) || 0;
         this._phanTichTongData.push({
           source: 'pixel',
           parsedDate: pDate,
@@ -5340,15 +5355,15 @@ const App = {
         <!-- CHỈ SỐ TỔNG -->
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:24px;">
           <div class="trendy-stat-card trendy-stat-1">
-            <div class="stat-label-trendy">Tổng gộp toàn công ty</div>
+            <div class="stat-label-trendy">Tổng tiền thực thu toàn công ty</div>
             <div class="stat-num-trendy">${this._formatVND(tongGop)}</div>
           </div>
           <div class="trendy-stat-card trendy-stat-4">
-            <div class="stat-label-trendy">Tổng Doanh thu Pixel</div>
+            <div class="stat-label-trendy">Pixel — tiền thực thu</div>
             <div class="stat-num-trendy">${this._formatVND(tongPixel)}</div>
           </div>
           <div class="trendy-stat-card trendy-stat-2">
-            <div class="stat-label-trendy">Tổng Doanh thu Etsy</div>
+            <div class="stat-label-trendy">Etsy — doanh thu net</div>
             <div class="stat-num-trendy">${this._formatVND(tongEtsy)}</div>
           </div>
         </div>
