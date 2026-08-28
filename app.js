@@ -777,13 +777,13 @@ const App = {
             <div class="form-group" style="display: flex; flex-direction: column; gap: 8px;">
               <label style="font-weight: 600; font-size: 0.9rem;">Ngày nhập</label>
               <div class="custom-date-wrapper">
-                <input type="date" onclick="this.showPicker()" id="etsy-ngay" class="form-input custom-date-input" value="${inputToday}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px; background: transparent;">
+                <input type="date" onclick="this.showPicker()" onchange="App._xemTruocEtsy()" id="etsy-ngay" class="form-input custom-date-input" value="${inputToday}" style="width: 100%; padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px; background: transparent;">
                 <svg class="custom-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               </div>
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; gap: 8px;">
               <label style="font-weight: 600; font-size: 0.9rem;">Shop</label>
-              <select id="etsy-nguon" class="form-input" style="padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px;">
+              <select id="etsy-nguon" class="form-input" onchange="App._xemTruocEtsy()" style="padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px;">
                 <option value="Apollo">Apollo</option>
                 <option value="Jolie">Jolie</option>
                 <option value="WAT">WAT</option>
@@ -791,8 +791,9 @@ const App = {
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; gap: 8px;">
               <label style="font-weight: 600; font-size: 0.9rem;">Số lũy kế (VNĐ)</label>
-              <input type="text" id="etsy-sotien" class="form-input" placeholder="Ví dụ: 18.000.000" oninput="App._formatVNCurrencyInput(this)" style="padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px; font-variant-numeric: tabular-nums;">
+              <input type="text" id="etsy-sotien" class="form-input" placeholder="Ví dụ: 18.000.000" oninput="App._formatVNCurrencyInput(this); App._xemTruocEtsy()" style="padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px; font-variant-numeric: tabular-nums;">
               <span style="font-size: 0.75rem; color: var(--clr-text-muted); margin-top: -4px;">Nhập tổng net profit cộng dồn tại thời điểm này</span>
+              <span id="etsy-xem-truoc" style="font-size: 0.8rem; font-weight: 600; margin-top: -2px; min-height: 18px;"></span>
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; gap: 8px;">
               <label style="font-weight: 600; font-size: 0.9rem;">Ghi chú (không bắt buộc)</label>
@@ -1044,6 +1045,53 @@ const App = {
     input.value = Number(val).toLocaleString('vi-VN');
   },
 
+  /**
+   * Tim so luy ke gan nhat cua 1 shop TRUOC hoac DUNG ngay dang nhap.
+   * Tra ve null neu shop do chua co ban ghi nao truoc thoi diem nay.
+   */
+  _luyKeGanNhatEtsy(shop, ngayISO) {
+    const moc = ngayISO ? new Date(ngayISO + 'T23:59:59') : new Date();
+    let ketQua = null;
+    (this._etsyData || []).forEach(r => {
+      if (r.nguon !== shop) return;
+      if (r.parsedDate > moc) return;
+      if (!ketQua || r.parsedDate > ketQua.parsedDate) ketQua = r;
+    });
+    return ketQua;
+  },
+
+  /**
+   * Hien truoc doanh thu phat sinh se duoc tinh ra, ngay khi dang go.
+   * Canh bao do neu so moi NHO HON lan nhap truoc (se ra doanh thu am).
+   */
+  _xemTruocEtsy() {
+    const el = document.getElementById('etsy-xem-truoc');
+    if (!el) return;
+    const shop   = document.getElementById('etsy-nguon')?.value || '';
+    const ngay   = document.getElementById('etsy-ngay')?.value || '';
+    const soRaw  = (document.getElementById('etsy-sotien')?.value || '').replace(/[^0-9]/g, '');
+
+    if (!soRaw) { el.textContent = ''; el.style.color = ''; return; }
+
+    const soMoi = parseInt(soRaw, 10);
+    const truoc = this._luyKeGanNhatEtsy(shop, ngay);
+
+    if (!truoc) {
+      el.style.color = 'var(--clr-text-muted)';
+      el.textContent = `Bản ghi đầu tiên của ${shop} → doanh thu phát sinh = ${this._formatVND(soMoi)}`;
+      return;
+    }
+
+    const chenh = soMoi - (truoc.so_tien || 0);
+    if (chenh < 0) {
+      el.style.color = '#C62828';
+      el.textContent = `⚠ Nhỏ hơn lần nhập trước (${this._formatVND(truoc.so_tien)} ngày ${truoc.ngay}) → doanh thu sẽ ÂM ${this._formatVND(Math.abs(chenh))}. Kiểm tra lại.`;
+    } else {
+      el.style.color = '#2E7D32';
+      el.textContent = `Doanh thu phát sinh sẽ là ${this._formatVND(chenh)} (lần trước ${this._formatVND(truoc.so_tien)} ngày ${truoc.ngay})`;
+    }
+  },
+
   async _saveDoanhThuEtsy(filterType, customFrom, customTo, fShop) {
     const ngay = document.getElementById('etsy-ngay').value;
     const nguon = document.getElementById('etsy-nguon').value;
@@ -1054,6 +1102,17 @@ const App = {
       this._showToast('Vui lòng nhập Ngày, Shop và Số lũy kế.', 'error');
       return;
     }
+
+    // Chan nham: so luy ke moi nho hon lan truoc -> doanh thu am
+    const truoc = this._luyKeGanNhatEtsy(nguon, ngay);
+    if (truoc && parseInt(soTienRaw, 10) < (truoc.so_tien || 0)) {
+      if (this._etsyXacNhanAm !== soTienRaw) {
+        this._etsyXacNhanAm = soTienRaw;
+        this._showToast('Số này NHỎ HƠN lần nhập trước — doanh thu sẽ âm. Bấm "Lưu bản ghi" lần nữa nếu vẫn muốn lưu.', 'error', 6000);
+        return;
+      }
+    }
+    this._etsyXacNhanAm = null;
 
     const btn = document.getElementById('btn-save-etsy');
     btn.disabled = true;
