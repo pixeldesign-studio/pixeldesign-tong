@@ -5192,7 +5192,7 @@ const App = {
     </div>`;
 
     try {
-      const [etsyRaw, pixelRaw, donRaw] = await Promise.all([
+      const [etsyRaw, pixelRaw, donRaw, tienDonRaw] = await Promise.all([
         this._readSheet(this.session.accessToken, CONFIG.SHEETS.DOANH_THU_KHAC).catch((e) => {
           this._showToast(`Lỗi đọc Etsy: ${e.message}`, 'error');
           return [];
@@ -5202,11 +5202,18 @@ const App = {
           return [];
         }),
         // Danh sach don de loai giao dich cua don da an / khong con ton tai
-        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG, '', CONFIG.OPERATION_SPREADSHEET_ID).catch(() => [])
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG, '', CONFIG.OPERATION_SPREADSHEET_ID).catch(() => []),
+        // Gia tri don nam o file TAI-CHINH, phai ghep vao moi tinh duoc doanh so
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.TIEN_DON, 'A:B').catch(() => [])
       ]);
 
+      const donList = (donRaw || []).filter(d => d.ma_don && d.da_an !== 'yes');
       const donHopLe = {};
-      (donRaw || []).forEach(d => { if (d.ma_don && d.da_an !== 'yes') donHopLe[d.ma_don] = true; });
+      donList.forEach(d => { donHopLe[d.ma_don] = true; });
+
+      const tienDonMap = {};
+      (tienDonRaw || []).forEach(row => { if (row.ma_don) tienDonMap[row.ma_don] = row.tong_gia_tri; });
+      donList.forEach(d => { if (tienDonMap[d.ma_don] !== undefined) d.tong_gia_tri = tienDonMap[d.ma_don]; });
 
       // Xử lý dữ liệu Etsy
       let etsyRecords = etsyRaw.map((d, i) => ({
@@ -5232,8 +5239,11 @@ const App = {
 
       // Gom Etsy vào _phanTichTongData
       etsyRecords.forEach(r => {
+        // Etsy: khach tra ngay tren san, khong co cong no
+        // -> doanh so va tien thuc thu la MOT con so
         this._phanTichTongData.push({
           source: 'etsy',
+          muc: 'ca_hai',
           parsedDate: r.parsedDate,
           ngayStr: r.ngay,
           tien: r.doanh_thu_phat_sinh || 0
@@ -5260,9 +5270,30 @@ const App = {
         }
         this._phanTichTongData.push({
           source: 'pixel',
+          muc: 'thu',
           parsedDate: pDate,
           ngayStr: r.ngay,
           tien: tienPixel
+        });
+      });
+
+      // Pixel: DOANH SO GHI NHAN = gia tri cac don LEN trong ky
+      // (theo ngay_len_don, khong phai ngay tra tien)
+      donList.forEach(d => {
+        const raw = d.ngay_len_don || d.ngay_tao || '';
+        if (!raw) return;
+        const parts = raw.trim().split('/');
+        if (parts.length < 3) return;
+        const dd = parseInt(parts[0], 10), mm = parseInt(parts[1], 10), yy = parseInt(parts[2], 10);
+        if (isNaN(dd) || isNaN(mm) || isNaN(yy)) return;
+        const phaiThu = this._tinhSoPhaiThu(d);
+        if (phaiThu <= 0) return;
+        this._phanTichTongData.push({
+          source: 'pixel',
+          muc: 'doanhso',
+          parsedDate: new Date(yy, mm - 1, dd),
+          ngayStr: raw,
+          tien: phaiThu
         });
       });
 
@@ -5296,9 +5327,11 @@ const App = {
       endDate = customTo ? new Date(customTo + 'T23:59:59') : new Date('2999-12-31');
     }
 
-    let tongGop = 0;
-    let tongPixel = 0;
-    let tongEtsy = 0;
+    // Hai thuoc do song song:
+    //  - THUC THU : tien da ve trong ky
+    //  - DOANH SO : gia tri ghi nhan trong ky (Pixel tinh theo ngay len don)
+    let tongGop = 0, tongPixel = 0, tongEtsy = 0;
+    let dsGop = 0,   dsPixel = 0,   dsEtsy = 0;
 
     const dailyMap = {};
 
@@ -5306,8 +5339,17 @@ const App = {
       if (r.parsedDate < startDate || r.parsedDate > endDate) return;
 
       const tien = r.tien;
-      tongGop += tien;
+      const laThu     = (r.muc === 'thu'     || r.muc === 'ca_hai');
+      const laDoanhSo = (r.muc === 'doanhso' || r.muc === 'ca_hai');
 
+      if (laDoanhSo) {
+        dsGop += tien;
+        if (r.source === 'pixel') dsPixel += tien; else if (r.source === 'etsy') dsEtsy += tien;
+      }
+
+      if (!laThu) return;   // phan duoi (bieu do, ty trong) dua tren TIEN THUC THU
+
+      tongGop += tien;
       if (r.source === 'pixel') tongPixel += tien;
       else if (r.source === 'etsy') tongEtsy += tien;
 
@@ -5315,7 +5357,7 @@ const App = {
       if (!dailyMap[dStr]) {
         dailyMap[dStr] = { date: dStr, parsedDate: r.parsedDate, pixel: 0, etsy: 0, total: 0 };
       }
-      
+
       dailyMap[dStr].total += tien;
       if (r.source === 'pixel') dailyMap[dStr].pixel += tien;
       if (r.source === 'etsy') dailyMap[dStr].etsy += tien;
@@ -5352,7 +5394,31 @@ const App = {
           </div>
         </div>
 
-        <!-- CHỈ SỐ TỔNG -->
+        <!-- HANG 1: DOANH SO GHI NHAN -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:24px;">
+          <div class="trendy-stat-card trendy-stat-1">
+            <div class="stat-label-trendy">Tổng doanh số toàn công ty</div>
+            <div class="stat-num-trendy">${this._formatVND(dsGop)}</div>
+          </div>
+          <div class="trendy-stat-card trendy-stat-4">
+            <div class="stat-label-trendy">Pixel — doanh số ghi nhận</div>
+            <div class="stat-num-trendy">${this._formatVND(dsPixel)}</div>
+          </div>
+          <div class="trendy-stat-card trendy-stat-2">
+            <div class="stat-label-trendy">Etsy — doanh số</div>
+            <div class="stat-num-trendy">${this._formatVND(dsEtsy)}</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px; color:var(--clr-text-muted); line-height:1.6; background:var(--clr-card); border-radius:var(--radius-lg); padding:14px 18px; box-shadow:var(--shadow-sm);">
+          <b>Doanh số ghi nhận</b> = giá trị đơn phát sinh trong kỳ (Pixel tính theo ngày lên đơn).
+          <b>Tiền thực thu</b> = tiền thật sự về trong kỳ.
+          Chênh lệch giữa hai hàng chính là phần khách còn nợ, hoặc tiền thu của đơn kỳ trước.
+          Riêng Etsy hai con số bằng nhau vì khách trả ngay trên sàn.
+          Biểu đồ và tỷ trọng bên dưới dựa trên <b>tiền thực thu</b>.
+        </div>
+
+        <!-- HANG 2: TIEN THUC THU -->
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:24px;">
           <div class="trendy-stat-card trendy-stat-1">
             <div class="stat-label-trendy">Tổng tiền thực thu toàn công ty</div>
