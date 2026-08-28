@@ -6144,11 +6144,20 @@ const App = {
            this._readSheet(this.session.accessToken, CONFIG.SHEETS.DIEM_DESIGNER, '', CONFIG.OPERATION_SPREADSHEET_ID).catch(()=>[])
         ]);
 
+        // Chi lay don CON TON TAI (bo don da an) - dung chuan voi cac man khac
+        const donHopLeHS = {};
+        donHangRows.forEach(d => { if (d.ma_don && d.da_an !== 'yes') donHopLeHS[d.ma_don] = true; });
+
+        // Doanh thu thang: tien thuc thu, BO tip va BO giao dich cua don da an.
+        // (Cung chuan voi man Phan tich tong, de hai man khong bao hai con so khac nhau)
         let tongDoanhThu = 0;
         giaoDichRows.forEach(gd => {
+           if (!donHopLeHS[gd.ma_don]) return;
+           const isTip = gd.loai && gd.loai.toLowerCase() === 'tip';
+           if (isTip) return;
            if (isTargetMonth((gd.ngay || '').trim())) {
               const tien = this._parseCurrency(gd.so_tien);
-              if (tien > 0) tongDoanhThu += tien; // Chỉ cộng tiền Thu (>0)
+              if (tien > 0) tongDoanhThu += tien;
            }
         });
 
@@ -6189,6 +6198,7 @@ const App = {
            let giaTriMangLai = 0;
            if (loai === 'sale') {
               const saleOrders = donHangRows.filter(d => {
+                 if (d.da_an === 'yes') return false;
                  if ((d.sale_phu_trach || '').trim().toLowerCase() !== hoTen.toLowerCase()) return false;
                  const tt = (d.trang_thai || '').toLowerCase();
                  if (tt.includes('hủy') || tt.includes('huy')) return false;
