@@ -5630,7 +5630,7 @@ const App = {
     </div>`;
 
     try {
-      const [manualRaw, etsyRaw, pixelRaw] = await Promise.all([
+      const [manualRaw, etsyRaw, pixelRaw, donRaw] = await Promise.all([
         this._readSheet(this.session.accessToken, CONFIG.SHEETS.TAI_CHINH_TONG).catch(e => {
           this._showToast(`Lỗi đọc Sổ quỹ: ${e.message}`, 'error'); return [];
         }),
@@ -5639,8 +5639,13 @@ const App = {
         }),
         this._readSheet(this.session.accessToken, CONFIG.SHEETS.GIAO_DICH_TIEN, 'A:E').catch(e => {
           this._showToast(`Lỗi đọc Pixel: ${e.message}`, 'error'); return [];
-        })
+        }),
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.DON_HANG, '', CONFIG.OPERATION_SPREADSHEET_ID).catch(() => [])
       ]);
+
+      // Chi lay giao dich cua don CON TON TAI (bo don da an/da xoa)
+      const donHopLeTC = {};
+      (donRaw || []).forEach(d => { if (d.ma_don && d.da_an !== 'yes') donHopLeTC[d.ma_don] = true; });
       
       // 1. Dữ liệu Manual
       this._taiChinhManualData = manualRaw.map((d, i) => {
@@ -5689,7 +5694,10 @@ const App = {
       });
 
       // 3. Dữ liệu Auto (Pixel)
+      // DONG TIEN khac DOANH THU: giu tien tip (tien that su vao tai khoan)
+      // va giu khoan am (hoan tra = tien di ra). Chi bo giao dich cua don da an.
       pixelRaw.forEach(r => {
+        if (!donHopLeTC[r.ma_don]) return;
         let pDate = new Date(0);
         if (r.ngay) {
           const [day, m, y] = r.ngay.split('/');
@@ -5760,7 +5768,29 @@ const App = {
     });
 
     const tongThuTong = tongThuTuDong + tongThuThuCong;
-    const soDu = tongThuTong - tongChiThuCong;
+    const soDu = tongThuTong - tongChiThuCong;   // chenh lech RIENG trong ky da loc
+
+    // ── SO DU THUC TE TRONG TAI KHOAN ────────────────────────────
+    // Khong phu thuoc bo loc ky: cong tat ca tu truoc toi nay.
+    //   so du dau ky + moi khoan vao - moi khoan ra
+    // "So du dau" la ban ghi trong TAI_CHINH_TONG co cot loai = "Số dư đầu".
+    let soDuDau = 0;
+    let coSoDuDau = false;
+    let thuTatCa = 0, chiTatCa = 0;
+    const homNay = new Date(); homNay.setHours(23, 59, 59, 999);
+
+    (this._taiChinhManualData || []).forEach(r => {
+      const l = (r.loai || '').trim();
+      if (l === 'Số dư đầu') { soDuDau += r.so_tien; coSoDuDau = true; return; }
+      if (r.parsedDate > homNay) return;
+      if (l === 'Thu') thuTatCa += r.so_tien;
+      else if (l === 'Chi') chiTatCa += r.so_tien;
+    });
+    (this._taiChinhAutoData || []).forEach(r => {
+      if (r.parsedDate > homNay) return;
+      thuTatCa += r.so_tien;
+    });
+    const soDuThucTe = soDuDau + thuTatCa - chiTatCa;
 
     const btnStyle = "padding:6px 12px; border-radius:16px; border:1px solid var(--clr-border-light); background:var(--clr-surface); cursor:pointer; font-size:13px; font-weight:500; color:var(--clr-text); transition:all 0.2s;";
     const btnActiveStyle = "padding:6px 12px; border-radius:16px; border:1px solid var(--clr-accent); background:var(--clr-accent); color:#fff; cursor:pointer; font-size:13px; font-weight:500; transition:all 0.2s;";
@@ -5819,10 +5849,26 @@ const App = {
             <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
           </div>
           <div class="trendy-stat-card trendy-stat-1">
-            <div class="stat-label-trendy">SỐ DƯ DÒNG TIỀN</div>
+            <div class="stat-label-trendy">CHÊNH LỆCH TRONG KỲ</div>
             <div class="stat-num-trendy" style="color: ${soDu < 0 ? 'var(--clr-danger)' : '#2A2420'} !important;">${this._formatVND(soDu)}</div>
             <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
           </div>
+        </div>
+
+        <!-- SO DU THUC TE TRONG TAI KHOAN -->
+        <div style="background:${coSoDuDau ? 'linear-gradient(135deg,#3F3428,#5A4A38)' : 'var(--clr-card)'}; color:${coSoDuDau ? '#F5EFE6' : 'var(--clr-text)'}; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px 24px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
+          <div>
+            <div style="font-size:13px; opacity:0.85; font-weight:600; letter-spacing:0.5px;">SỐ DƯ HIỆN TẠI TRONG TÀI KHOẢN</div>
+            <div style="font-size:28px; font-weight:800; margin-top:4px;">${this._formatVND(soDuThucTe)}</div>
+            <div style="font-size:12px; opacity:0.8; margin-top:6px;">
+              ${coSoDuDau
+                ? `Số dư đầu ${this._formatVND(soDuDau)} + đã thu ${this._formatVND(thuTatCa)} − đã chi ${this._formatVND(chiTatCa)}`
+                : 'Chưa khai Số dư đầu — con số này chỉ là thu trừ chi, chưa phải số dư thật.'}
+            </div>
+          </div>
+          ${coSoDuDau ? '' : `<div style="font-size:12px; max-width:340px; background:rgba(198,40,40,0.08); color:#C62828; border-radius:8px; padding:10px 12px; line-height:1.5;">
+            Để con số này khớp với tài khoản ngân hàng, hãy thêm <b>một</b> khoản có Loại = <b>Số dư đầu</b>, ngày là ngày bắt đầu ghi sổ, số tiền là số dư tài khoản lúc đó.
+          </div>`}
         </div>
 
         <!-- FORM NHẬP -->
@@ -5841,6 +5887,7 @@ const App = {
               <select id="tct-loai" class="form-select" style="width:100%;">
                 <option value="Thu">Thu</option>
                 <option value="Chi">Chi</option>
+                <option value="Số dư đầu">Số dư đầu (chỉ khai 1 lần)</option>
               </select>
             </div>
             <div>
