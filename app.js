@@ -655,7 +655,12 @@ const App = {
       this._dangLamMoiNgam = xong;
 
       try {
-        this.tokenClient.requestAccessToken({ prompt: '' });
+        // prompt:'' = dung hoi lai quyen da cap
+        // hint:<email> = chi dich danh tai khoan, tranh Google bat chon tai khoan
+        //                (day la nguyen nhan chinh khien popup hien ra)
+        const xinToken = { prompt: '' };
+        if (this.session?.email) xinToken.hint = this.session.email;
+        this.tokenClient.requestAccessToken(xinToken);
       } catch (e) {
         console.warn('[Auth] Không gọi được làm mới ngầm:', e.message);
         this._dangLamMoiNgam = null;
