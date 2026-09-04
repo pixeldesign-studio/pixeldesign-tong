@@ -487,6 +487,20 @@ const App = {
     return isNaN(d.getTime()) ? new Date(0) : d;
   },
 
+  /**
+   * Hiện ngày ra màn hình luôn theo một kiểu: dd/mm/yyyy.
+   * Nhận cả "2026-08-31" (tab DOANH_THU_KHAC ghi kiểu này vì ô chọn
+   * ngày của trình duyệt trả về vậy) lẫn "31/08/2026" (các tab còn
+   * lại). Không nhận ra thì trả về nguyên xi, không bịa.
+   */
+  _ngayHienThi(chuoi) {
+    const t = String(chuoi || '').trim();
+    if (!t) return '';
+    const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}))?/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}` + (iso[4] ? ' ' + iso[4] : '');
+    return t;
+  },
+
   /** Tên cột nào được coi là cột ngày. */
   _laCotNgay(ten) {
     const t = String(ten || '').toLowerCase();
@@ -1002,7 +1016,7 @@ const App = {
       else if (r.nguon === 'Jolie') tongJolie += tien;
       else if (r.nguon === 'WAT') tongWat += tien;
 
-      const dateStr = r.ngay || 'Chưa rõ';
+      const dateStr = this._ngayHienThi(r.ngay) || 'Chưa rõ';
       if (!dailyMap[dateStr]) {
         dailyMap[dateStr] = { 
           date: dateStr, 
@@ -1176,7 +1190,7 @@ const App = {
     `;
 
     for (const rec of records) {
-      const ngay = this._escHtml(rec.ngay || '');
+      const ngay = this._escHtml(this._ngayHienThi(rec.ngay));
       const nguon = this._escHtml(rec.nguon || '');
       const luyKe = Number(rec.so_tien).toLocaleString('vi-VN') + ' đ';
       const dtps = Number(rec.doanh_thu_phat_sinh).toLocaleString('vi-VN') + ' đ';
@@ -2793,7 +2807,7 @@ const App = {
           <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); font-weight:600; color:#4A4036;">${this._escHtml(r.ma_don || '')}</td>
           <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); color:#5C544D;">${this._escHtml(khachHang)}</td>
           <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); color:#C62828; font-weight:700; text-align:right;">${this._formatVND(tienHoan)}</td>
-          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); text-align:right; color:#8A724C;">${this._escHtml(r.ngay || '')}</td>
+          <td style="padding:16px 24px; border-bottom:1px solid rgba(138,114,76,0.1); text-align:right; color:#8A724C;">${this._escHtml(this._ngayHienThi(r.ngay))}</td>
         </tr>
       `;
     }).join('');
@@ -2997,7 +3011,7 @@ const App = {
          }
       }
 
-      const dateStr = r.ngay || 'Chưa rõ';
+      const dateStr = this._ngayHienThi(r.ngay) || 'Chưa rõ';
       if (!dailyMap[dateStr]) {
         dailyMap[dateStr] = { date: dateStr, parsedDate: r.parsedDate, total: 0, count: 0 };
       }
@@ -5107,7 +5121,7 @@ const App = {
       if (tien < 0) tongHoan += Math.abs(tien);
       if (r.loai && r.loai.toLowerCase() === 'tip') tongTip += tien;
 
-      const dateStr = r.ngay || 'Chưa rõ';
+      const dateStr = this._ngayHienThi(r.ngay) || 'Chưa rõ';
       if (!dailyMap[dateStr]) {
         dailyMap[dateStr] = { date: dateStr, parsedDate: r.parsedDate, total: 0, count: 0 };
       }
@@ -5517,7 +5531,7 @@ const App = {
       let etsyRecords = etsyRaw.map((d, i) => ({
         ...d,
         _origIndex: i,
-        parsedDate: new Date(d.ngay || 0),
+        parsedDate: this._ngayVNSangDate(d.ngay),
         so_tien: parseInt((d.so_tien || '').replace(/[^0-9-]/g, ''), 10) || 0
       }));
       etsyRecords.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
@@ -5651,7 +5665,7 @@ const App = {
       if (r.source === 'pixel') tongPixel += tien;
       else if (r.source === 'etsy') tongEtsy += tien;
 
-      const dStr = r.ngayStr || 'Chưa rõ';
+      const dStr = this._ngayHienThi(r.ngayStr) || 'Chưa rõ';
       if (!dailyMap[dStr]) {
         dailyMap[dStr] = { date: dStr, parsedDate: r.parsedDate, pixel: 0, etsy: 0, total: 0 };
       }
@@ -5963,7 +5977,7 @@ const App = {
       // 2. Dữ liệu Auto (Etsy)
       let etsyRecords = etsyRaw.map(d => ({
         ...d,
-        parsedDate: new Date(d.ngay || 0),
+        parsedDate: this._ngayVNSangDate(d.ngay),
         so_tien: parseInt((d.so_tien || '').replace(/[^0-9-]/g, ''), 10) || 0
       }));
       etsyRecords.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
@@ -6249,7 +6263,7 @@ const App = {
                 <tbody>
                   ${filteredAutoData.length > 0 ? filteredAutoData.map(r => `
                     <tr class="table-row-hover">
-                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(r.ngay)}</td>
+                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(this._ngayHienThi(r.ngay))}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); font-weight:500;">${this._escHtml(r.nguon)}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600; color:#8E44AD;">${this._formatVND(r.so_tien)}</td>
                     </tr>
@@ -6278,7 +6292,7 @@ const App = {
                 <tbody>
                   ${filteredManualData.length > 0 ? filteredManualData.map(r => `
                     <tr class="table-row-hover">
-                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(r.ngay)}</td>
+                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(this._ngayHienThi(r.ngay))}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">
                         <span style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:600; background:${r.loai === 'Thu' ? 'rgba(39,174,96,0.1)' : 'rgba(231,76,60,0.1)'}; color:${r.loai === 'Thu' ? '#27AE60' : '#E74C3C'};">${this._escHtml(r.loai)}</span>
                       </td>
