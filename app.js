@@ -942,17 +942,7 @@ const App = {
       // Sắp xếp cũ nhất -> mới nhất để tính lũy kế đúng theo thời gian
       records.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
 
-      const shopLastCumulative = {};
-
-      for (const rec of records) {
-        const shop = rec.nguon;
-        if (shopLastCumulative[shop] === undefined) {
-          rec.doanh_thu_phat_sinh = rec.so_tien;
-        } else {
-          rec.doanh_thu_phat_sinh = rec.so_tien - shopLastCumulative[shop];
-        }
-        shopLastCumulative[shop] = rec.so_tien;
-      }
+      this._tinhPhatSinhEtsy(records);   // tính lại từ 0 mỗi tháng, giống màn hình Etsy
       // Đảo lại mới nhất lên đầu
       records.sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
       
@@ -1082,8 +1072,8 @@ const App = {
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; gap: 8px;">
               <label style="font-weight: 600; font-size: 0.9rem;">Số lũy kế (VNĐ)</label>
-              <input type="text" id="etsy-sotien" class="form-input" placeholder="Ví dụ: 18.000.000" oninput="App._formatVNCurrencyInput(this); App._xemTruocEtsy()" style="padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px; font-variant-numeric: tabular-nums;">
-              <span style="font-size: 0.75rem; color: var(--clr-text-muted); margin-top: -4px;">Nhập tổng net profit cộng dồn tại thời điểm này</span>
+              <input type="text" id="etsy-sotien" class="form-input" placeholder="Ví dụ: 1.250.000 hoặc -40.013" oninput="App._formatSoCoAmInput(this); App._xemTruocEtsy()" style="padding: 10px 12px; border: 1px solid var(--clr-border); border-radius: 8px; font-variant-numeric: tabular-nums;">
+              <span style="font-size: 0.75rem; color: var(--clr-text-muted); margin-top: -4px;">Chép đúng số "net profit … for this month" trên Etsy (Finances › Payment account). Âm thì gõ dấu trừ. Mỗi tháng tự tính lại từ 0.</span>
               <span id="etsy-xem-truoc" style="font-size: 0.8rem; font-weight: 600; margin-top: -2px; min-height: 18px;"></span>
             </div>
             <div class="form-group" style="display: flex; flex-direction: column; gap: 8px;">
@@ -1327,6 +1317,44 @@ const App = {
     }
   },
 
+  /**
+   * DOANH THU ETSY PHÁT SINH — TÍNH LẠI TỪ 0 MỖI THÁNG
+   * Số nhập là "net profit … for this month" chép từ Etsy. Etsy tự đưa số này
+   * về 0 đầu mỗi tháng, nên app cũng vậy:
+   *   - lần nhập đầu tiên của shop trong tháng  -> phát sinh = chính số đó
+   *   - các lần sau trong cùng tháng            -> phát sinh = số mới − lần trước
+   * (Trước 10/2026 app trừ xuyên tháng — tháng 8 chỉ có 1 tháng nên kết quả cũ không đổi.)
+   * records phải xếp CŨ -> MỚI.
+   */
+  _tinhPhatSinhEtsy(records) {
+    const truoc = {};
+    for (const rec of records) {
+      const d = rec.parsedDate;
+      const thang = (d instanceof Date && !isNaN(d)) ? `${d.getFullYear()}-${d.getMonth() + 1}` : '?';
+      const khoa = `${rec.nguon}|${thang}`;
+      rec.doanh_thu_phat_sinh = (truoc[khoa] === undefined) ? rec.so_tien : rec.so_tien - truoc[khoa];
+      truoc[khoa] = rec.so_tien;
+    }
+    return records;
+  },
+
+  /** Ô nhập số tiền cho phép số âm (Etsy có tháng chỉ có phí -> net profit âm). */
+  _formatSoCoAmInput(input) {
+    const am = /^\s*[-−]/.test(input.value);
+    const val = input.value.replace(/[^0-9]/g, '');
+    if (!val) { input.value = am ? '-' : ''; return; }
+    input.value = (am ? '-' : '') + Number(val).toLocaleString('vi-VN');
+  },
+
+  /** Đọc số từ ô nhập có thể âm. Trả NaN nếu trống. */
+  _docSoCoAm(chuoi) {
+    const t = String(chuoi || '').trim();
+    const am = /^[-−]/.test(t);
+    const so = t.replace(/[^0-9]/g, '');
+    if (!so) return NaN;
+    return (am ? -1 : 1) * parseInt(so, 10);
+  },
+
   _formatVNCurrencyInput(input) {
     let val = input.value.replace(/[^0-9]/g, '');
     if (!val) {
@@ -1342,10 +1370,11 @@ const App = {
    */
   _luyKeGanNhatEtsy(shop, ngayISO) {
     const moc = ngayISO ? new Date(ngayISO + 'T23:59:59') : new Date();
+    const dauThang = new Date(moc.getFullYear(), moc.getMonth(), 1);   // chỉ so trong cùng tháng
     let ketQua = null;
     (this._etsyData || []).forEach(r => {
       if (r.nguon !== shop) return;
-      if (r.parsedDate > moc) return;
+      if (r.parsedDate > moc || r.parsedDate < dauThang) return;
       if (!ketQua || r.parsedDate > ketQua.parsedDate) ketQua = r;
     });
     return ketQua;
@@ -1360,16 +1389,16 @@ const App = {
     if (!el) return;
     const shop   = document.getElementById('etsy-nguon')?.value || '';
     const ngay   = document.getElementById('etsy-ngay')?.value || '';
-    const soRaw  = (document.getElementById('etsy-sotien')?.value || '').replace(/[^0-9]/g, '');
+    const soMoi  = this._docSoCoAm(document.getElementById('etsy-sotien')?.value);
 
-    if (!soRaw) { el.textContent = ''; el.style.color = ''; return; }
+    if (isNaN(soMoi)) { el.textContent = ''; el.style.color = ''; return; }
 
-    const soMoi = parseInt(soRaw, 10);
     const truoc = this._luyKeGanNhatEtsy(shop, ngay);
 
     if (!truoc) {
-      el.style.color = 'var(--clr-text-muted)';
-      el.textContent = `Bản ghi đầu tiên của ${shop} → doanh thu phát sinh = ${this._formatVND(soMoi)}`;
+      const nd = ngay ? new Date(ngay + 'T00:00:00') : new Date();
+      el.style.color = soMoi < 0 ? '#8A5A00' : 'var(--clr-text-muted)';
+      el.textContent = `Lần nhập đầu tiên của ${shop} trong tháng ${String(nd.getMonth() + 1).padStart(2, '0')}/${nd.getFullYear()} → doanh thu phát sinh = ${this._formatVND(soMoi)}`;
       return;
     }
 
@@ -1386,17 +1415,18 @@ const App = {
   async _saveDoanhThuEtsy(filterType, customFrom, customTo, fShop) {
     const ngay = document.getElementById('etsy-ngay').value;
     const nguon = document.getElementById('etsy-nguon').value;
-    const soTienRaw = document.getElementById('etsy-sotien').value.replace(/[^0-9]/g, '');
+    const soTienSo = this._docSoCoAm(document.getElementById('etsy-sotien').value);
+    const soTienRaw = isNaN(soTienSo) ? '' : String(soTienSo);
     const ghiChu = document.getElementById('etsy-ghichu').value.trim();
 
     if (!ngay || !nguon || !soTienRaw) {
-      this._showToast('Vui lòng nhập Ngày, Shop và Số lũy kế.', 'error');
+      this._showToast('Vui lòng nhập Ngày, Shop và Số net profit của tháng.', 'error');
       return;
     }
 
-    // Chan nham: so luy ke moi nho hon lan truoc -> doanh thu am
+    // Chan nham: so moi nho hon lan truoc TRONG CUNG THANG -> doanh thu am
     const truoc = this._luyKeGanNhatEtsy(nguon, ngay);
-    if (truoc && parseInt(soTienRaw, 10) < (truoc.so_tien || 0)) {
+    if (truoc && soTienSo < (truoc.so_tien || 0)) {
       if (this._etsyXacNhanAm !== soTienRaw) {
         this._etsyXacNhanAm = soTienRaw;
         this._showToast('Số này NHỎ HƠN lần nhập trước — doanh thu sẽ âm. Bấm "Lưu bản ghi" lần nữa nếu vẫn muốn lưu.', 'error', 6000);
@@ -1410,7 +1440,7 @@ const App = {
     btn.innerHTML = 'Đang lưu...';
 
     try {
-      const soTien = parseInt(soTienRaw, 10);
+      const soTien = soTienSo;
       const values = [[ngay, nguon, soTien, ghiChu]];
       await this._appendSheet(CONFIG.SHEETS.DOANH_THU_KHAC, values);
       
@@ -5776,16 +5806,7 @@ const App = {
       }));
       etsyRecords.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
 
-      const shopLastCumulative = {};
-      for (const rec of etsyRecords) {
-        const shop = rec.nguon;
-        if (shopLastCumulative[shop] === undefined) {
-          rec.doanh_thu_phat_sinh = rec.so_tien;
-        } else {
-          rec.doanh_thu_phat_sinh = rec.so_tien - shopLastCumulative[shop];
-        }
-        shopLastCumulative[shop] = rec.so_tien;
-      }
+      this._tinhPhatSinhEtsy(etsyRecords);   // tính lại từ 0 mỗi tháng, giống màn hình Etsy
 
       this._phanTichTongData = [];
 
@@ -6365,19 +6386,14 @@ const App = {
       }));
       etsyRecords.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
       
-      const shopLastCumulative = {};
-      for (const rec of etsyRecords) {
-        const shop = rec.nguon;
-        if (shopLastCumulative[shop] === undefined) {
-          rec.doanh_thu_phat_sinh = rec.so_tien;
-        } else {
-          rec.doanh_thu_phat_sinh = rec.so_tien - shopLastCumulative[shop];
-        }
-        shopLastCumulative[shop] = rec.so_tien;
-      }
+      this._tinhPhatSinhEtsy(etsyRecords);   // tính lại từ 0 mỗi tháng, giống màn hình Etsy
 
       this._taiChinhAutoData = [];
-      etsyRecords.forEach(r => {
+      // TỪ 10/2026: tiền Etsy KHÔNG tự cộng vào số dư nữa — tiền nằm trong ví Etsy,
+      // chỉ thành tiền thật khi Etsy chuyển về ngân hàng. Ông Hải nhập tay:
+      //   Thu "Etsy – tiền về TK" · Chi "Etsy – trả phí sàn".
+      // Doanh thu Etsy vẫn xem ở trang Doanh thu Etsy và Phân tích tổng.
+      [].forEach(r => {
         if (r.doanh_thu_phat_sinh) {
           this._taiChinhAutoData.push({
             ngay: r.ngay,
@@ -6604,7 +6620,7 @@ const App = {
         <!-- CHỈ SỐ TỔNG -->
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:24px;">
           <div class="trendy-stat-card trendy-stat-1">
-            <div class="stat-label-trendy">Thu tự động (Etsy+Pixel)</div>
+            <div class="stat-label-trendy">Thu tự động (Pixel)</div>
             <div class="stat-num-trendy">${this._formatVND(tongThuTuDong)}</div>
             <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
           </div>
@@ -6693,7 +6709,7 @@ const App = {
           <!-- BẢNG TỰ ĐỘNG -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden;">
             <div style="padding:16px 20px; background:rgba(142, 68, 173, 0.05); border-bottom:1px solid var(--clr-border-light);">
-              <h3 style="margin:0; font-size:15px; font-weight:600; color:#8E44AD;">Doanh thu Tự động (Etsy + Pixel)</h3>
+              <h3 style="margin:0; font-size:15px; font-weight:600; color:#8E44AD;">Tiền về tự động (Pixel)</h3>
             </div>
             <div style="overflow-x:auto;">
               <table style="width:100%; border-collapse:collapse; font-size:14px;">
@@ -6711,7 +6727,7 @@ const App = {
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); font-weight:500;">${this._escHtml(r.nguon)}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600; color:#8E44AD;">${this._formatVND(r.so_tien)}</td>
                     </tr>
-                  `).join('') : `<tr><td colspan="3" style="padding:24px; text-align:center; color:var(--clr-text-muted);">Không có doanh thu tự động trong kỳ</td></tr>`}
+                  `).join('') : `<tr><td colspan="3" style="padding:24px; text-align:center; color:var(--clr-text-muted);">Không có tiền Pixel về trong kỳ</td></tr>`}
                 </tbody>
               </table>
             </div>
@@ -6846,11 +6862,13 @@ const App = {
       'Văn phòng',
       'TK BIDV – trả lại tiền ứng',
       'TK BIDV – rút lợi nhuận',
+      'Etsy – trả phí sàn',
       'Khác',
     ],
     'Thu': [
       'Quảng cáo – sale hoàn ứng',
       'TK BIDV – ứng vào công ty',
+      'Etsy – tiền về TK',
       'Thu khác',
     ],
   },
