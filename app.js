@@ -6075,11 +6075,25 @@ const App = {
       const loai = (r.loai || '').trim();
       if (filterLoai !== 'all' && loai !== filterLoai) return;
 
-      if (loai === 'Thu') tongThuThuCong += r.so_tien;
-      else if (loai === 'Chi') tongChiThuCong += r.so_tien;
+      // Tiền qua lại TK BIDV cá nhân không phải thu/chi kinh doanh -> không cộng vào đây
+      if (!this._laHMBidv(r.hang_muc)) {
+        if (loai === 'Thu') tongThuThuCong += r.so_tien;
+        else if (loai === 'Chi') tongChiThuCong += r.so_tien;
+      }
 
       filteredManualData.push(r);
     });
+
+    // TK BIDV trong kỳ đang lọc (không phụ thuộc bộ lọc Loại)
+    const bidvKy = { vao: 0, tra: 0, rut: 0 };
+    this._taiChinhManualData.forEach(r => {
+      if (r.parsedDate < startDate || r.parsedDate > endDate) return;
+      const hm = this._chuanChu(r.hang_muc), l = (r.loai || '').trim();
+      if (l === 'Thu' && hm === this.HM_BIDV_VAO) bidvKy.vao += r.so_tien;
+      if (l === 'Chi' && hm === this.HM_BIDV_TRA) bidvKy.tra += r.so_tien;
+      if (l === 'Chi' && hm === this.HM_BIDV_RUT) bidvKy.rut += r.so_tien;
+    });
+    this._tctBidvKy = bidvKy;
 
     // ── BỘ LỌC HẠNG MỤC (chỉ lọc BẢNG Sổ quỹ, không đổi các thẻ tổng phía trên) ──
     const locHM = this._tctHangMucLoc || 'all';
@@ -6150,6 +6164,16 @@ const App = {
       thuTatCa += r.so_tien;
     });
     const soDuThucTe = soDuDau + thuTatCa - chiTatCa;
+
+    // Nợ TK BIDV: tính từ sau ngày chốt sổ (như Số dư thực tế) + nợ đầu kỳ khai trong Cài đặt
+    let bidvVaoLk = 0, bidvTraLk = 0;
+    (this._taiChinhManualData || []).forEach(r => {
+      if (!trongPhamVi(r.parsedDate)) return;
+      const hm = this._chuanChu(r.hang_muc), l = (r.loai || '').trim();
+      if (l === 'Thu' && hm === this.HM_BIDV_VAO) bidvVaoLk += r.so_tien;
+      if (l === 'Chi' && hm === this.HM_BIDV_TRA) bidvTraLk += r.so_tien;
+    });
+    this._tctBidvLk = { vao: bidvVaoLk, tra: bidvTraLk, ngayChot: ngayChotSoDu };
     const ngayChotStr = ngayChotSoDu
       ? `${String(ngayChotSoDu.getDate()).padStart(2,'0')}/${String(ngayChotSoDu.getMonth()+1).padStart(2,'0')}/${ngayChotSoDu.getFullYear()}`
       : '';
@@ -6224,7 +6248,7 @@ const App = {
             <div style="font-size:28px; font-weight:800; margin-top:4px;">${this._formatVND(soDuThucTe)}</div>
             <div style="font-size:12px; opacity:0.8; margin-top:6px;">
               ${coSoDuDau
-                ? `Chốt cuối ngày ${ngayChotStr}: ${this._formatVND(soDuDau)} + đã thu ${this._formatVND(thuTatCa)} − đã chi ${this._formatVND(chiTatCa)} (tính từ ngày kế tiếp trở đi)`
+                ? `Chốt cuối ngày ${ngayChotStr}: ${this._formatVND(soDuDau)} + đã thu ${this._formatVND(thuTatCa)} − đã chi ${this._formatVND(chiTatCa)} (tính từ ngày kế tiếp trở đi, đã gồm tiền qua lại TK BIDV)`
                 : 'Chưa khai Số dư đầu — con số này chỉ là thu trừ chi, chưa phải số dư thật.'}
             </div>
           </div>
@@ -6232,6 +6256,9 @@ const App = {
             Để con số này khớp tài khoản ngân hàng: thêm <b>một</b> khoản Loại = <b>Số dư đầu</b>, ngày là <b>ngày chốt sổ</b>, số tiền là <b>số dư cuối ngày hôm đó</b>. App chỉ cộng thu và trừ chi <b>từ ngày kế tiếp</b> trở đi.
           </div>`}
         </div>
+
+        <!-- CHUYỂN VỚI TK CÁ NHÂN BIDV (vẽ bởi _veTheBidv) -->
+        <div id="tct-bidv"></div>
 
         <!-- QUỸ ADS ĐÃ ỨNG CHO SALE (vẽ bởi _veTheQuyAds) -->
         <div id="tct-quy-ads"></div>
@@ -6345,6 +6372,7 @@ const App = {
     `;
     this._tctDoiLoai();      // nạp danh sách Hạng mục theo Loại đang chọn
     this._veTheQuyAds();     // vẽ lại thẻ Quỹ ads (không đọc lại file)
+    this._veTheBidv();
   },
 
   async _saveTaiChinhTongRecord() {
@@ -6427,12 +6455,24 @@ const App = {
       'Thưởng',
       'Phần mềm / công cụ',
       'Văn phòng',
+      'TK BIDV – trả lại tiền ứng',
+      'TK BIDV – rút lợi nhuận',
       'Khác',
     ],
     'Thu': [
       'Quảng cáo – sale hoàn ứng',
+      'TK BIDV – ứng vào công ty',
       'Thu khác',
     ],
+  },
+  // Tiền qua lại với TK BIDV cá nhân: KHÔNG phải doanh thu / chi phí.
+  // Vẫn cộng trừ vào Số dư tài khoản, nhưng KHÔNG vào Tổng thu / Tổng chi / Chênh lệch.
+  HM_BIDV_VAO:   'TK BIDV – ứng vào công ty',
+  HM_BIDV_TRA:   'TK BIDV – trả lại tiền ứng',
+  HM_BIDV_RUT:   'TK BIDV – rút lợi nhuận',
+  _laHMBidv(hm) {
+    const h = this._chuanChu(hm);
+    return h === this.HM_BIDV_VAO || h === this.HM_BIDV_TRA || h === this.HM_BIDV_RUT;
   },
   TCT_BAT_BUOC_GHI_CHU: ['Khác', 'Thu khác'],
   HM_UNG_SALE:  'Quảng cáo – ứng sale',
@@ -6569,6 +6609,107 @@ const App = {
   _thangChu(khoa) { const [y, m] = khoa.split('-'); return `${m}/${y}`; },
 
   // ==========================================
+  // THẺ "CHUYỂN VỚI TK CÁ NHÂN (BIDV)"
+  // ------------------------------------------
+  // Nợ = Nợ đầu kỳ (Cài đặt) + Ứng vào − Trả lại tiền ứng
+  // Rút lợi nhuận KHÔNG làm giảm nợ.
+  // ==========================================
+  BIDV_KHOA_NO_DAU_KY: 'bidv_no_dau_ky',
+  _bidvHienCaiDat: false,
+  _tctMoCaiDatBidv() { this._bidvHienCaiDat = !this._bidvHienCaiDat; this._veTheBidv(); },
+
+  _veTheBidv() {
+    const o = document.getElementById('tct-bidv');
+    if (!o) return;
+    const vnd = (x) => this._formatVND(Math.round(x));
+    const ky = this._tctBidvKy || { vao: 0, tra: 0, rut: 0 };
+    const lk = this._tctBidvLk || { vao: 0, tra: 0, ngayChot: null };
+    const qa = this._quyAds || {};
+    const raw = qa.cauHinh ? qa.cauHinh.raw : null;
+    const noDauKyO = raw ? this._soTuO(raw[this.BIDV_KHOA_NO_DAU_KY]) : null;
+    const coNoDauKy = noDauKyO !== null && !isNaN(noDauKyO);
+
+    let dongNo;
+    if (qa.dangTai) {
+      dongNo = '<span style="color:var(--clr-text-muted);">Đang đọc cài đặt...</span>';
+    } else if (!raw) {
+      dongNo = `<span style="color:#C62828;">Không đọc được cài đặt (tab ${this._escHtml(CONFIG.SHEETS.CAU_HINH_TONG)}) — chưa tính được số nợ.</span>`;
+    } else {
+      const no = (coNoDauKy ? noDauKyO : 0) + lk.vao - lk.tra;
+      const tuNgay = lk.ngayChot ? ` (tính từ sau ngày chốt sổ ${this._ngayChu(lk.ngayChot)})` : '';
+      dongNo = no >= 0
+        ? `Công ty đang nợ TK BIDV: <b style="font-size:20px;">${vnd(no)}</b>`
+        : `<span style="color:#C62828;">Trả lại nhiều hơn số đã ứng ${vnd(-no)} — kiểm lại hạng mục (có thể khoản đó là rút lợi nhuận).</span>`;
+      dongNo += `<div style="font-size:12px; color:var(--clr-text-muted); margin-top:4px;">`
+        + `${coNoDauKy ? vnd(noDauKyO) + ' (nợ đầu kỳ) + ' : ''}${vnd(lk.vao)} ứng vào − ${vnd(lk.tra)} trả lại${tuNgay}`
+        + `${coNoDauKy ? '' : '<br><span style="color:#8A5A00;">Chưa khai nợ đầu kỳ — nếu trước ngày chốt sổ công ty đã nợ TK BIDV, bấm Cài đặt để nhập.</span>'}</div>`;
+    }
+
+    let caiDat = '';
+    if (raw && this._bidvHienCaiDat) {
+      const hien = coNoDauKy ? String(Math.round(noDauKyO)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+      caiDat = `
+        <div style="border:1px dashed var(--clr-border-light); border-radius:10px; padding:14px; margin-top:14px; display:flex; flex-wrap:wrap; gap:12px; align-items:end;">
+          <div style="flex:1; min-width:200px;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Công ty nợ TK BIDV tính đến hết ngày chốt sổ (VNĐ)</label>
+            <input type="text" id="bidv-no-dau-ky" class="form-input" style="width:100%;" placeholder="VD: 0" value="${hien}"
+                   oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',')">
+          </div>
+          <button class="btn btn-primary btn-sm" id="bidv-btn-luu" onclick="App._luuNoDauKyBidv()">Lưu</button>
+        </div>`;
+    }
+
+    const oSo = (nhan, so, phu) => `
+      <div style="background:rgba(0,0,0,0.025); border-radius:10px; padding:12px 14px;">
+        <div style="font-size:12px; color:var(--clr-text-muted); font-weight:600; letter-spacing:0.3px;">${nhan}</div>
+        <div style="font-size:18px; font-weight:700; margin-top:4px;">${so}</div>
+        <div style="font-size:11px; color:var(--clr-text-muted); margin-top:2px;">${phu}</div>
+      </div>`;
+
+    o.innerHTML = `
+      <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px; font-weight:700; letter-spacing:0.5px;">CHUYỂN VỚI TK CÁ NHÂN (BIDV)</div>
+            <div style="font-size:12px; color:var(--clr-text-muted); margin-top:2px;">Không tính vào Tổng thu / Tổng chi / Chênh lệch · vẫn tính vào Số dư tài khoản</div>
+          </div>
+          ${raw ? `<button class="btn btn-outline btn-sm" onclick="App._tctMoCaiDatBidv()">${this._bidvHienCaiDat ? 'Đóng cài đặt' : 'Cài đặt'}</button>` : ''}
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+          ${oSo('ỨNG VÀO CÔNG TY', vnd(ky.vao), 'trong kỳ đang lọc')}
+          ${oSo('TRẢ LẠI TIỀN ỨNG', vnd(ky.tra), 'trong kỳ đang lọc')}
+          ${oSo('RÚT LỢI NHUẬN', vnd(ky.rut), 'trong kỳ đang lọc')}
+        </div>
+        <div style="font-size:14px; margin-top:14px;">${dongNo}</div>
+        ${caiDat}
+      </div>`;
+  },
+
+  async _luuNoDauKyBidv() {
+    const raw = (document.getElementById('bidv-no-dau-ky')?.value || '').trim();
+    if (raw === '') { this._showToast('Vui lòng nhập số nợ đầu kỳ (không nợ thì nhập 0).', 'error'); return; }
+    const so = parseInt(raw.replace(/[^0-9]/g, ''), 10);
+    if (isNaN(so)) { this._showToast('Số tiền không hợp lệ.', 'error'); return; }
+    const btn = document.getElementById('bidv-btn-luu');
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Đang lưu...'; }
+    try {
+      const tab = CONFIG.SHEETS.CAU_HINH_TONG;
+      const [vung] = await this._docSoThat(CONFIG.SPREADSHEET_ID, [`${this._tenTabA1(tab)}!A:B`]);
+      const ch = this._docCauHinhQuyAds(vung).raw;
+      const k = this.BIDV_KHOA_NO_DAU_KY;
+      if (ch._dong[k]) await this._writeSheet(tab, `B${ch._dong[k]}`, [[so]]);
+      else await this._appendSheet(tab, [[k, so]]);
+      this._showToast('Đã lưu nợ đầu kỳ TK BIDV.', 'success');
+      this._bidvHienCaiDat = false;
+      this._napQuyAds();
+    } catch (e) {
+      console.error(e);
+      this._showToast(`Lỗi lưu: ${e.message}`, 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Lưu'; }
+    }
+  },
+
+  // ==========================================
   // THẺ "QUỸ ADS ĐÃ ỨNG CHO SALE"
   // ------------------------------------------
   // Còn lại = Số dư quỹ đầu kỳ + Đã ứng − Sale hoàn ứng − Đã tiêu
@@ -6630,6 +6771,7 @@ const App = {
 
     this._quyAds = kq;
     this._veTheQuyAds();
+    this._veTheBidv();       // nợ đầu kỳ BIDV nằm trong cùng tab cài đặt
   },
 
   /** Tab CAU_HINH_TONG: cột A = khoa, cột B = gia_tri. */
