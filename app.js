@@ -6028,7 +6028,7 @@ const App = {
       // Sắp xếp auto data mới nhất lên đầu
       this._taiChinhAutoData.sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
 
-      this._renderTaiChinhTongContent('all'); // Mặc định hiển thị tất cả
+      this._renderTaiChinhTongContent('month'); // Mặc định: Tháng này
       this._napQuyAds();                        // Thẻ Quỹ ads — đọc file ADS (chỉ đọc)
     } catch (e) {
       console.error(e);
@@ -6036,7 +6036,11 @@ const App = {
     }
   },
 
-  _renderTaiChinhTongContent(filterType = 'all', filterLoai = 'all', customFrom = '', customTo = '') {
+  // "Tất cả" của Tài chính tổng chỉ tính từ ngày này (app Tổng bắt đầu ghi sổ từ 01/10/2026).
+  // Chỉ là bộ lọc HIỂN THỊ — không xoá, không sửa dữ liệu nào trên Sheets.
+  TCT_NGAY_BAT_DAU: new Date(2026, 9, 1),
+
+  _renderTaiChinhTongContent(filterType = 'month', filterLoai = 'all', customFrom = '', customTo = '') {
     const content = document.getElementById('page-content');
     this._tctThamSo = [filterType, filterLoai, customFrom, customTo];   // để bộ lọc Hạng mục vẽ lại đúng kỳ
     const today = new Date();
@@ -6055,6 +6059,8 @@ const App = {
     } else if (filterType === 'custom') {
       startDate = customFrom ? new Date(customFrom + 'T00:00:00') : new Date(0);
       endDate = customTo ? new Date(customTo + 'T23:59:59') : new Date('2999-12-31');
+    } else if (filterType === 'all') {
+      startDate = new Date(this.TCT_NGAY_BAT_DAU);   // Tất cả = từ 01/10/2026 trở đi
     }
 
     let tongThuTuDong = 0;
@@ -6190,7 +6196,7 @@ const App = {
             <button style="${filterType === 'month' ? btnActiveStyle : btnStyle}" onclick="App._renderTaiChinhTongContent('month', document.getElementById('tct-filter-loai').value)">Tháng này</button>
             <button style="${filterType === 'last_month' ? btnActiveStyle : btnStyle}" onclick="App._renderTaiChinhTongContent('last_month', document.getElementById('tct-filter-loai').value)">Tháng trước</button>
             <button style="${filterType === 'year' ? btnActiveStyle : btnStyle}" onclick="App._renderTaiChinhTongContent('year', document.getElementById('tct-filter-loai').value)">Năm nay</button>
-            <button style="${filterType === 'all' ? btnActiveStyle : btnStyle}" onclick="App._renderTaiChinhTongContent('all', document.getElementById('tct-filter-loai').value)">Tất cả</button>
+            <button style="${filterType === 'all' ? btnActiveStyle : btnStyle}" onclick="App._renderTaiChinhTongContent('all', document.getElementById('tct-filter-loai').value)">Tất cả (từ 10/2026)</button>
           </div>
           <div style="display:flex; gap:12px; align-items:center;">
             <select id="tct-filter-loai" class="form-select" style="width:120px;" onchange="App._renderTaiChinhTongContent('${filterType}', this.value, '${customFrom}', '${customTo}')">
@@ -6512,7 +6518,7 @@ const App = {
   /** Bộ lọc Hạng mục của bảng Sổ quỹ (chỉ lọc bảng, không đổi các thẻ tổng). */
   _tctLocHangMuc(giaTri) {
     this._tctHangMucLoc = giaTri || 'all';
-    const t = this._tctThamSo || ['all', 'all', '', ''];
+    const t = this._tctThamSo || ['month', 'all', '', ''];
     this._renderTaiChinhTongContent(t[0], t[1], t[2], t[3]);
   },
 
