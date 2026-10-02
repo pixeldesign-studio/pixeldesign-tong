@@ -6981,7 +6981,8 @@ const App = {
     });
 
     // Ngày cuối có số trong ADS NGÀY + trung bình 7 ngày gần nhất (TK nhân viên)
-    const ngayCoSo = [...new Set(ads.ngay.map(r => r.date.getTime()))].sort((a, b) => b - a);
+    // Chỉ dùng số liệu SAU ngày mốc — bài chỉ chạy trước mốc (tháng cũ) không cần phân loại TK
+    const ngayCoSo = [...new Set(ads.ngay.filter(r => sauMoc(r.date)).map(r => r.date.getTime()))].sort((a, b) => b - a);
     const ngayCuoi = ngayCoSo.length ? new Date(ngayCoSo[0]) : null;
     const bayNgay = new Set(ngayCoSo.slice(0, 7));
     let tong7 = 0;
