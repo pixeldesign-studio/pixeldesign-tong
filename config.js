@@ -24,6 +24,10 @@ const CONFIG = {
   OPERATION_SPREADSHEET_ID: '1pzBurrJji6mAE_UYlDDZc6g8ibIj8okslXNYLRkQ0v4',
   PAYROLL_SPREADSHEET_ID: '1mx2zXi9r4omD9gPMqfl2icZ25GaC3sb0zeDDyofe-QM',
 
+  // File "PXDE - CHIẾN DỊCH ADS" — app CHỈ ĐỌC (thẻ Quỹ ads ở Tài chính tổng).
+  // Tài khoản đăng nhập app phải được chia sẻ file này (Người xem là đủ).
+  ADS_SPREADSHEET_ID: '1xHVbpsqzDq7Bh7Sxj6t-l7DM0I-_kYajsB8msjFXecs',
+
   // ──────────────────────────────────────────────────────────
   // GOOGLE API SCOPES
   // Quyền truy cập được yêu cầu khi đăng nhập
@@ -54,6 +58,7 @@ const CONFIG = {
     CAU_HINH_LUONG: 'CAU_HINH_LUONG',
     DANH_MUC_NGANH: 'DANH_MUC_NGANH',
     DANH_MUC_ITEM:  'DANH_MUC_ITEM',
+    CAU_HINH_TONG:  'CAU_HINH_TONG',   // cài đặt chung app Tổng: cột A khoa, cột B gia_tri
   },
 
   // ──────────────────────────────────────────────────────────

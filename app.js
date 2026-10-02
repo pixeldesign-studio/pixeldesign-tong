@@ -6029,6 +6029,7 @@ const App = {
       this._taiChinhAutoData.sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
 
       this._renderTaiChinhTongContent('all'); // Mặc định hiển thị tất cả
+      this._napQuyAds();                        // Thẻ Quỹ ads — đọc file ADS (chỉ đọc)
     } catch (e) {
       console.error(e);
       content.innerHTML = `<div style="color:var(--clr-error); padding:24px;">Lỗi tải dữ liệu: ${this._escHtml(e.message)}</div>`;
@@ -6037,6 +6038,7 @@ const App = {
 
   _renderTaiChinhTongContent(filterType = 'all', filterLoai = 'all', customFrom = '', customTo = '') {
     const content = document.getElementById('page-content');
+    this._tctThamSo = [filterType, filterLoai, customFrom, customTo];   // để bộ lọc Hạng mục vẽ lại đúng kỳ
     const today = new Date();
     let startDate = new Date(0);
     let endDate = new Date('2999-12-31');
@@ -6078,6 +6080,29 @@ const App = {
 
       filteredManualData.push(r);
     });
+
+    // ── BỘ LỌC HẠNG MỤC (chỉ lọc BẢNG Sổ quỹ, không đổi các thẻ tổng phía trên) ──
+    const locHM = this._tctHangMucLoc || 'all';
+    const bangSoQuy = locHM === 'all' ? filteredManualData
+      : filteredManualData.filter(r => {
+          const hm = this._chuanChu(r.hang_muc);
+          return locHM === '__trong__' ? hm === '' : hm === locHM;
+        });
+    let thuLoc = 0, chiLoc = 0;
+    bangSoQuy.forEach(r => {
+      const l = (r.loai || '').trim();
+      if (l === 'Thu') thuLoc += r.so_tien; else if (l === 'Chi') chiLoc += r.so_tien;
+    });
+    const hmCoDinh = [...this.TCT_HANG_MUC.Chi, ...this.TCT_HANG_MUC.Thu];
+    const hmCu = [...new Set((this._taiChinhManualData || [])
+      .map(r => this._chuanChu(r.hang_muc)).filter(h => h && !hmCoDinh.includes(h)))].sort((a, b) => a.localeCompare(b, 'vi'));
+    const coHMTrong = (this._taiChinhManualData || []).some(r => !this._chuanChu(r.hang_muc));
+    const opt = (v, nhan) => `<option value="${this._escHtml(v)}" ${locHM === v ? 'selected' : ''}>${this._escHtml(nhan)}</option>`;
+    const tuyChonLocHM = opt('all', 'Tất cả hạng mục')
+      + `<optgroup label="Chi">${this.TCT_HANG_MUC.Chi.map(h => opt(h, h)).join('')}</optgroup>`
+      + `<optgroup label="Thu">${this.TCT_HANG_MUC.Thu.map(h => opt(h, h)).join('')}</optgroup>`
+      + (hmCu.length ? `<optgroup label="Hạng mục cũ (ngoài danh sách)">${hmCu.map(h => opt(h, h)).join('')}</optgroup>` : '')
+      + (coHMTrong ? opt('__trong__', '(Không có hạng mục)') : '');
 
     const tongThuTong = tongThuTuDong + tongThuThuCong;
     const soDu = tongThuTong - tongChiThuCong;   // chenh lech RIENG trong ky da loc
@@ -6208,6 +6233,9 @@ const App = {
           </div>`}
         </div>
 
+        <!-- QUỸ ADS ĐÃ ỨNG CHO SALE (vẽ bởi _veTheQuyAds) -->
+        <div id="tct-quy-ads"></div>
+
         <!-- FORM NHẬP -->
         <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:24px;">
           <h3 style="margin:0 0 16px 0; font-size:16px; font-weight:600;">Nhập khoản Thu khác / Chi thủ công</h3>
@@ -6221,7 +6249,7 @@ const App = {
             </div>
             <div>
               <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Loại</label>
-              <select id="tct-loai" class="form-select" style="width:100%;">
+              <select id="tct-loai" class="form-select" style="width:100%;" onchange="App._tctDoiLoai()">
                 <option value="Thu">Thu</option>
                 <option value="Chi">Chi</option>
                 <option value="Số dư đầu">Số dư chốt sổ (số dư cuối ngày)</option>
@@ -6231,14 +6259,14 @@ const App = {
               <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Số tiền (VNĐ)</label>
               <input type="text" id="tct-sotien" class="form-input" style="width:100%;" placeholder="VD: 500,000" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',')">
             </div>
-            <div>
+            <div id="tct-hangmuc-khung">
               <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Hạng mục</label>
-              <input type="text" id="tct-hangmuc" class="form-input" style="width:100%;" placeholder="VD: Lương, Phần mềm...">
+              <select id="tct-hangmuc" class="form-select" style="width:100%;" onchange="App._tctDoiHangMuc()"></select>
             </div>
           </div>
           <div style="display:flex; gap:16px; align-items:end; margin-top:16px;">
             <div style="flex-grow:1;">
-              <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Ghi chú (không bắt buộc)</label>
+              <label id="tct-ghichu-nhan" style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Ghi chú (không bắt buộc)</label>
               <input type="text" id="tct-ghichu" class="form-input" style="width:100%;" placeholder="Ghi chú thêm...">
             </div>
             <button class="btn btn-primary" id="tct-btn-save" onclick="App._saveTaiChinhTongRecord()" style="min-width:120px;">Lưu khoản</button>
@@ -6275,9 +6303,15 @@ const App = {
 
           <!-- BẢNG THỦ CÔNG -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden;">
-            <div style="padding:16px 20px; background:rgba(41, 128, 185, 0.05); border-bottom:1px solid var(--clr-border-light);">
+            <div style="padding:16px 20px; background:rgba(41, 128, 185, 0.05); border-bottom:1px solid var(--clr-border-light); display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
               <h3 style="margin:0; font-size:15px; font-weight:600; color:#2980B9;">Thu / Chi Thủ công (Sổ quỹ)</h3>
+              <select id="tct-filter-hangmuc" class="form-select" style="width:auto; min-width:220px; max-width:100%;" onchange="App._tctLocHangMuc(this.value)">
+                ${tuyChonLocHM}
+              </select>
             </div>
+            ${locHM !== 'all' ? `<div style="padding:10px 20px; font-size:13px; color:var(--clr-text-muted); border-bottom:1px solid var(--clr-border-light);">
+              Đang lọc <b>${this._escHtml(locHM === '__trong__' ? '(Không có hạng mục)' : locHM)}</b>: ${bangSoQuy.length} khoản${thuLoc ? ' · Thu ' + this._formatVND(thuLoc) : ''}${chiLoc ? ' · Chi ' + this._formatVND(chiLoc) : ''}
+            </div>` : ''}
             <div style="overflow-x:auto;">
               <table style="width:100%; border-collapse:collapse; font-size:14px;">
                 <thead>
@@ -6290,7 +6324,7 @@ const App = {
                   </tr>
                 </thead>
                 <tbody>
-                  ${filteredManualData.length > 0 ? filteredManualData.map(r => `
+                  ${bangSoQuy.length > 0 ? bangSoQuy.map(r => `
                     <tr class="table-row-hover">
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(this._ngayHienThi(r.ngay))}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">
@@ -6309,22 +6343,39 @@ const App = {
 
       </div>
     `;
+    this._tctDoiLoai();      // nạp danh sách Hạng mục theo Loại đang chọn
+    this._veTheQuyAds();     // vẽ lại thẻ Quỹ ads (không đọc lại file)
   },
 
   async _saveTaiChinhTongRecord() {
     const ngayInput = document.getElementById('tct-ngay').value;
     const loai = document.getElementById('tct-loai').value;
     const soTienRaw = document.getElementById('tct-sotien').value;
-    const hangMuc = (document.getElementById('tct-hangmuc').value || '').trim();
-    const ghiChu = (document.getElementById('tct-ghichu').value || '').trim();
+    const dsHM = this.TCT_HANG_MUC[loai];          // Số dư chốt sổ: không có hạng mục
+    const hangMuc = dsHM ? (document.getElementById('tct-hangmuc')?.value || '').trim() : '';
+    const oGhiChu = document.getElementById('tct-ghichu');
+    const ghiChu = (oGhiChu.value || '').trim();
 
-    if (!ngayInput || !loai || !soTienRaw || !hangMuc) {
-      this._showToast('Vui lòng nhập đủ Ngày, Loại, Số tiền và Hạng mục.', 'error');
+    if (!ngayInput || !loai || !soTienRaw) {
+      this._showToast('Vui lòng nhập đủ Ngày, Loại và Số tiền.', 'error');
       return;
+    }
+    if (!dsHM && loai !== 'Số dư đầu') {
+      this._showToast('Loại không hợp lệ.', 'error');
+      return;
+    }
+    if (dsHM) {
+      if (!hangMuc) { this._showToast('Vui lòng chọn Hạng mục.', 'error'); return; }
+      if (!dsHM.includes(hangMuc)) { this._showToast('Hạng mục không nằm trong danh sách.', 'error'); return; }
+      if (this.TCT_BAT_BUOC_GHI_CHU.includes(hangMuc) && !ghiChu) {
+        this._showToast(`Chọn "${hangMuc}" thì phải ghi rõ Ghi chú.`, 'error');
+        oGhiChu.focus();
+        return;
+      }
     }
 
     const soTien = parseInt(soTienRaw.replace(/[^0-9]/g, ''), 10);
-    if (isNaN(soTien) || soTien <= 0) {
+    if (isNaN(soTien) || (loai === 'Số dư đầu' ? soTien < 0 : soTien <= 0)) {
       this._showToast('Số tiền không hợp lệ.', 'error');
       return;
     }
@@ -6339,10 +6390,18 @@ const App = {
     btn.disabled = true;
 
     try {
-      // 5 cột theo thứ tự: ngay, loai, so_tien, hang_muc, ghi_chu
-      const row = [ngay, loai, soTien, hangMuc, ghiChu];
-      await this._appendRow(this.session.accessToken, CONFIG.SHEETS.TAI_CHINH_TONG, row);
-      
+      // GHI THEO TÊN CỘT, không theo vị trí: đọc dòng tiêu đề trước,
+      // để cột trên Sheet có xếp thứ tự nào thì số tiền cũng vào đúng ô.
+      const tab = CONFIG.SHEETS.TAI_CHINH_TONG;
+      const [vung] = await this._docSoThat(this._getSpreadsheetIdFor(tab), [`${this._tenTabA1(tab)}!1:1`]);
+      const tieuDe = ((vung && vung[0]) || []).map(h => this._chuanChu(h));
+      const giaTri = { ngay, loai, so_tien: soTien, hang_muc: hangMuc, ghi_chu: ghiChu };
+      const thieu = Object.keys(giaTri).filter(k => !tieuDe.includes(k));
+      if (thieu.length) throw new Error(`Tab ${tab} thiếu cột ${thieu.join(', ')} ở dòng 1 — chưa lưu gì.`);
+      const row = tieuDe.map(t => (giaTri[t] !== undefined ? giaTri[t] : ''));
+
+      await this._appendSheet(tab, [row]);
+
       this._showToast('Đã lưu khoản thành công!', 'success');
       this.renderTaiChinhTongPage(); // Tải lại trang để update số liệu
     } catch (e) {
@@ -6350,6 +6409,609 @@ const App = {
       this._showToast(`Lỗi khi lưu: ${e.message}`, 'error');
       btn.innerHTML = oldText;
       btn.disabled = false;
+    }
+  },
+
+  // ==========================================
+  // SỔ QUỸ — DANH SÁCH HẠNG MỤC CỐ ĐỊNH
+  // ------------------------------------------
+  // Viết đúng từng chữ. Dấu gạch là "–" (gạch ngang ngắn).
+  // Thẻ "Quỹ ads đã ứng cho sale" so khớp ĐÚNG các chuỗi này —
+  // sửa chữ ở đây mà không sửa dữ liệu cũ là thẻ tính sai.
+  // ==========================================
+  TCT_HANG_MUC: {
+    'Chi': [
+      'Quảng cáo – ứng sale',
+      'Quảng cáo – TK anh Hải',
+      'Lương',
+      'Thưởng',
+      'Phần mềm / công cụ',
+      'Văn phòng',
+      'Khác',
+    ],
+    'Thu': [
+      'Quảng cáo – sale hoàn ứng',
+      'Thu khác',
+    ],
+  },
+  TCT_BAT_BUOC_GHI_CHU: ['Khác', 'Thu khác'],
+  HM_UNG_SALE:  'Quảng cáo – ứng sale',
+  HM_HOAN_UNG:  'Quảng cáo – sale hoàn ứng',
+
+  /** Đổi Loại trên form -> nạp lại danh sách Hạng mục (Số dư chốt sổ: ẩn ô). */
+  _tctDoiLoai() {
+    const loai  = document.getElementById('tct-loai')?.value;
+    const khung = document.getElementById('tct-hangmuc-khung');
+    const sel   = document.getElementById('tct-hangmuc');
+    if (!khung || !sel) return;
+    const ds = this.TCT_HANG_MUC[loai];
+    if (!ds) {
+      khung.style.display = 'none';
+      sel.innerHTML = '';
+    } else {
+      khung.style.display = '';
+      sel.innerHTML = '<option value="">— Chọn hạng mục —</option>' +
+        ds.map(h => `<option value="${this._escHtml(h)}">${this._escHtml(h)}</option>`).join('');
+    }
+    this._tctDoiHangMuc();
+  },
+
+  /** Chọn "Khác" / "Thu khác" -> nhãn Ghi chú chuyển thành bắt buộc. */
+  _tctDoiHangMuc() {
+    const hm   = document.getElementById('tct-hangmuc')?.value || '';
+    const nhan = document.getElementById('tct-ghichu-nhan');
+    const o    = document.getElementById('tct-ghichu');
+    if (!nhan || !o) return;
+    const batBuoc = this.TCT_BAT_BUOC_GHI_CHU.includes(hm);
+    nhan.innerHTML = batBuoc
+      ? `Ghi chú <span style="color:#C62828; font-weight:600;">(bắt buộc khi chọn "${this._escHtml(hm)}")</span>`
+      : 'Ghi chú (không bắt buộc)';
+    o.placeholder = batBuoc ? 'Ghi rõ khoản này là gì...' : 'Ghi chú thêm...';
+  },
+
+  /** Bộ lọc Hạng mục của bảng Sổ quỹ (chỉ lọc bảng, không đổi các thẻ tổng). */
+  _tctLocHangMuc(giaTri) {
+    this._tctHangMucLoc = giaTri || 'all';
+    const t = this._tctThamSo || ['all', 'all', '', ''];
+    this._renderTaiChinhTongContent(t[0], t[1], t[2], t[3]);
+  },
+
+  // ==========================================
+  // GỌI SHEETS API — ĐỌC GIÁ TRỊ SỐ THẬT
+  // ------------------------------------------
+  // _readSheet() đọc chuỗi HIỂN THỊ ("83.768" theo locale vi_VN).
+  // Thẻ Quỹ ads cần SỐ THẬT nên dùng UNFORMATTED_VALUE.
+  // Chỉ GET — không có lệnh ghi nào đi vào file ADS.
+  // ==========================================
+  async _goiSheetsGet(url, laLanThu2 = false) {
+    await this._baoDamConPhien();
+    const token = this.session?.accessToken;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+    if (res.status === 401 && !laLanThu2) {
+      const ok = await this._lamMoiPhienNgam();
+      if (ok) return this._goiSheetsGet(url, true);
+      this._phienDaHet();
+      const e = new Error('Phiên đăng nhập đã hết hạn.'); e.status = 401; throw e;
+    }
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try { const b = await res.json(); detail = b.error?.message || detail; } catch (_) {}
+      const e = new Error(detail); e.status = res.status; throw e;
+    }
+    return res.json();
+  },
+
+  /** Đọc nhiều vùng một lần, trả về mảng 2 chiều SỐ THẬT cho từng vùng. */
+  async _docSoThat(spreadsheetId, ranges) {
+    const q = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${q}` +
+                `&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER`;
+    const data = await this._goiSheetsGet(url);
+    return (data.valueRanges || []).map(v => v.values || []);
+  },
+
+  /** Danh sách tên tab của một file. */
+  async _layTenCacTab(spreadsheetId) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
+    const data = await this._goiSheetsGet(url);
+    return (data.sheets || []).map(s => s.properties?.title || '');
+  },
+
+  /** Tên tab trong A1 notation (bọc nháy đơn, nhân đôi nháy bên trong). */
+  _tenTabA1(ten) { return `'${String(ten).replace(/'/g, "''")}'`; },
+
+  /** Chuẩn hoá chữ để so: NFC, gộp khoảng trắng, bỏ đầu/cuối. */
+  _chuanChu(s) {
+    return String(s == null ? '' : s).normalize('NFC').replace(/\s+/g, ' ').trim();
+  },
+  /** Chuẩn hoá NHÃN cột để so (không phân biệt hoa/thường). */
+  _nhanCot(s) { return this._chuanChu(s).toLowerCase(); },
+
+  /**
+   * Ô -> số. Ô trống trả null (KHÔNG coi là 0). Không đọc được trả NaN.
+   * Số thật thì lấy thẳng. Chuỗi thì hiểu theo kiểu Việt Nam:
+   * "83.768" = 83768 · "1,1" = 1.1 · "1.234.567,5" = 1234567.5
+   */
+  _soTuO(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'number') return isFinite(v) ? v : NaN;
+    let s = String(v).replace(/[\s đ₫]/g, '').replace(/VND$/i, '');
+    if (s === '') return null;
+    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, '');
+    else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+    if (!/^-?\d+(\.\d+)?$/.test(s)) return NaN;
+    return parseFloat(s);
+  },
+
+  /** Ô -> Date (00:00 giờ máy). Nhận số ngày của Sheets, "dd/mm/yyyy", "yyyy-mm-dd". */
+  _ngayTuO(v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number') {
+      if (!(v >= 30000 && v <= 60000)) return null;
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
+      return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+    const t = String(v).trim();
+    let m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    return null;
+  },
+
+  _ngayChu(d) {
+    if (!d) return '';
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  },
+  _khoaThang(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; },
+  _thangChu(khoa) { const [y, m] = khoa.split('-'); return `${m}/${y}`; },
+
+  // ==========================================
+  // THẺ "QUỸ ADS ĐÃ ỨNG CHO SALE"
+  // ------------------------------------------
+  // Còn lại = Số dư quỹ đầu kỳ + Đã ứng − Sale hoàn ứng − Đã tiêu
+  // Chỉ tính TK nhân viên. TK anh Hải trừ thẳng vào tài khoản công ty,
+  // không có tiền ứng, nên KHÔNG nằm trong thẻ này.
+  // ==========================================
+  ADS_TAB: { NGAY: 'ADS NGÀY', DANH_MUC: 'DANH MỤC', SO_THANG: 'SỐ NHẬP THÁNG' },
+  ADS_MUC_THUC_TRA_NV: 'Chi ads thực trả — TK nhân viên (đã cộng VAT + phí nộp)',
+  QA_KHOA: {
+    DAU_KY: 'quy_ads_so_du_dau_ky',
+    MOC:    'quy_ads_ngay_moc',
+    HE_SO:  'quy_ads_he_so',
+  },
+  QA_HE_SO_MAC_DINH: 1.1,
+
+  /** Nạp cài đặt (CAU_HINH_TONG) + file ADS rồi vẽ thẻ. Không bao giờ ghi vào file ADS. */
+  async _napQuyAds() {
+    this._quyAds = { dangTai: true };
+    this._veTheQuyAds();
+    const kq = {};
+
+    // 1. Cài đặt
+    try {
+      const tab = CONFIG.SHEETS.CAU_HINH_TONG;
+      const [vung] = await this._docSoThat(CONFIG.SPREADSHEET_ID, [`${this._tenTabA1(tab)}!A:B`]);
+      kq.cauHinh = this._docCauHinhQuyAds(vung);
+    } catch (e) {
+      kq.loiCauHinh = (e.status === 400)
+        ? `Chưa thấy tab "${CONFIG.SHEETS.CAU_HINH_TONG}" trong file pixeldesign-TAI-CHINH-ADMIN.`
+        : `Không đọc được cài đặt Quỹ ads: ${e.message}`;
+    }
+
+    // 2. File "PXDE - CHIẾN DỊCH ADS" — CHỈ ĐỌC
+    try {
+      const tenCacTab = await this._layTenCacTab(CONFIG.ADS_SPREADSHEET_ID);
+      const tim = (ten) => tenCacTab.find(t => this._nhanCot(t) === this._nhanCot(ten));
+      const tabNgay = tim(this.ADS_TAB.NGAY), tabDm = tim(this.ADS_TAB.DANH_MUC), tabThang = tim(this.ADS_TAB.SO_THANG);
+      const thieuTab = [];
+      if (!tabNgay)  thieuTab.push(this.ADS_TAB.NGAY);
+      if (!tabDm)    thieuTab.push(this.ADS_TAB.DANH_MUC);
+      if (!tabThang) thieuTab.push(this.ADS_TAB.SO_THANG);
+      if (thieuTab.length) {
+        kq.loiAds = `File "PXDE - CHIẾN DỊCH ADS" thiếu tab: ${thieuTab.join(', ')}.`;
+      } else {
+        const [vNgay, vDm, vThang] = await this._docSoThat(CONFIG.ADS_SPREADSHEET_ID,
+          [this._tenTabA1(tabNgay), this._tenTabA1(tabDm), this._tenTabA1(tabThang)]);
+        kq.ads = this._xuLyFileAds(vNgay, vDm, vThang);
+      }
+    } catch (e) {
+      const email = this.session?.email || 'tài khoản đang đăng nhập';
+      if (e.status === 403) {
+        kq.loiAds = `Tài khoản ${email} chưa có quyền đọc file "PXDE - CHIẾN DỊCH ADS". Chia sẻ file cho email này (quyền Người xem là đủ).`;
+      } else if (e.status === 404) {
+        kq.loiAds = 'Không tìm thấy file "PXDE - CHIẾN DỊCH ADS" (ID sai hoặc file đã bị xoá).';
+      } else {
+        kq.loiAds = `Không đọc được file "PXDE - CHIẾN DỊCH ADS": ${e.message}`;
+      }
+    }
+
+    this._quyAds = kq;
+    this._veTheQuyAds();
+  },
+
+  /** Tab CAU_HINH_TONG: cột A = khoa, cột B = gia_tri. */
+  _docCauHinhQuyAds(vung) {
+    const ch = { _dong: {} };   // _dong: khoa -> số dòng thật trên Sheet (để ghi đè)
+    (vung || []).forEach((r, i) => {
+      const k = this._chuanChu(r[0]);
+      if (!k || k === 'khoa') return;
+      ch._dong[k] = i + 1;
+      ch[k] = r[1];
+    });
+    ch._coTieuDe = (vung && vung[0] && this._chuanChu(vung[0][0]) === 'khoa');
+    ch._soDong = (vung || []).length;
+
+    const dauKy = this._soTuO(ch[this.QA_KHOA.DAU_KY]);
+    const moc   = this._ngayTuO(ch[this.QA_KHOA.MOC]);
+    const heSoO = this._soTuO(ch[this.QA_KHOA.HE_SO]);
+    return {
+      raw: ch,
+      dauKy: (dauKy === null || isNaN(dauKy)) ? null : dauKy,
+      dauKyLoi: (dauKy !== null && isNaN(dauKy)),
+      moc,
+      mocLoi: (ch[this.QA_KHOA.MOC] !== undefined && ch[this.QA_KHOA.MOC] !== '' && !moc),
+      heSo: (heSoO === null || isNaN(heSoO) || heSoO <= 0) ? this.QA_HE_SO_MAC_DINH : heSoO,
+      heSoMacDinh: (heSoO === null || isNaN(heSoO) || heSoO <= 0),
+    };
+  },
+
+  /**
+   * Bóc 3 tab của file ADS. Tìm dòng tiêu đề và cột theo NHÃN chữ,
+   * không cố định số dòng / số cột.
+   */
+  _xuLyFileAds(vNgay, vDm, vThang) {
+    const loi = [], canhBao = [];
+    const N = (s) => this._nhanCot(s);
+
+    // ── ADS NGÀY ───────────────────────────────────────────
+    const ngay = [];
+    const hNgay = (vNgay || []).findIndex(r => (r || []).some(c => N(c) === 'mã bài'));
+    if (hNgay < 0) {
+      loi.push('Tab ADS NGÀY: không tìm thấy dòng tiêu đề có chữ "Mã bài".');
+    } else {
+      const h = vNgay[hNgay].map(N);
+      const cNgay = h.indexOf('ngày'), cMa = h.indexOf('mã bài'), cChi = h.indexOf('chi tiêu');
+      const thieu = [];
+      if (cNgay < 0) thieu.push('Ngày');
+      if (cChi < 0)  thieu.push('Chi tiêu');
+      if (thieu.length) {
+        loi.push(`Tab ADS NGÀY: dòng tiêu đề thiếu cột ${thieu.join(', ')}.`);
+      } else {
+        let trongChi = 0, saiChi = 0, saiNgay = 0, khongMa = 0;
+        for (let i = hNgay + 1; i < vNgay.length; i++) {
+          const r = vNgay[i] || [];
+          const ma = this._chuanChu(r[cMa]);
+          const chiO = r[cChi];
+          const ngayO = r[cNgay];
+          const chi = this._soTuO(chiO);
+          if (!ma && chi === null && (ngayO === undefined || ngayO === '')) continue;   // dòng trống
+          if (!ma) { if (chi !== null) khongMa++; continue; }
+          const d = this._ngayTuO(ngayO);
+          if (!d) { saiNgay++; continue; }
+          if (chi === null) { trongChi++; continue; }      // ô trống: KHÔNG coi là 0
+          if (isNaN(chi)) { saiChi++; continue; }
+          ngay.push({ date: d, ma, chi });
+        }
+        if (trongChi) canhBao.push(`ADS NGÀY: ${trongChi} dòng có Mã bài nhưng ô Chi tiêu trống — chưa tính.`);
+        if (saiChi)   canhBao.push(`ADS NGÀY: ${saiChi} dòng Chi tiêu không đọc được thành số — chưa tính.`);
+        if (saiNgay)  canhBao.push(`ADS NGÀY: ${saiNgay} dòng thiếu hoặc sai Ngày — chưa tính.`);
+        if (khongMa)  canhBao.push(`ADS NGÀY: ${khongMa} dòng có Chi tiêu nhưng không có Mã bài — chưa tính.`);
+      }
+    }
+
+    // ── DANH MỤC — bảng bài (cột A tiêu đề = "Mã bài") ───────
+    const danhMuc = {};
+    const hDm = (vDm || []).findIndex(r => N((r || [])[0]) === 'mã bài');
+    if (hDm < 0) {
+      loi.push('Tab DANH MỤC: không tìm thấy bảng bài quảng cáo (dòng có cột A = "Mã bài").');
+    } else {
+      const cTk = vDm[hDm].map(N).indexOf('tk quảng cáo');
+      if (cTk < 0) {
+        loi.push('Tab DANH MỤC: bảng bài quảng cáo thiếu cột "TK quảng cáo".');
+      } else {
+        for (let i = hDm + 1; i < vDm.length; i++) {
+          const r = vDm[i] || [];
+          const a = this._chuanChu(r[0]);
+          if (!a) continue;
+          if (N(a) === 'mã chiến dịch' || N(a) === 'mã bài') break;   // sang bảng khác
+          danhMuc[N(a)] = this._chuanChu(r[cTk]);
+        }
+      }
+    }
+
+    // ── SỐ NHẬP THÁNG — bảng có tiêu đề Tháng · Mục · Giá trị ──
+    const thang = {};            // 'YYYY-MM' -> số thực trả (null = chưa có số)
+    const dichMuc = N(this.ADS_MUC_THUC_TRA_NV);
+    let coBang = false;
+    (vThang || []).forEach((r, iHang) => {
+      (r || []).forEach((c, iCot) => {
+        if (N(c) !== 'mục' || N(r[iCot - 1]) !== 'tháng' || N(r[iCot + 1]) !== 'giá trị') return;
+        coBang = true;
+        for (let i = iHang + 1; i < vThang.length; i++) {
+          const d = vThang[i] || [];
+          if (N(d[iCot]) !== dichMuc) continue;
+          let khoa = null;
+          const tO = d[iCot - 1];
+          const mm = String(tO == null ? '' : tO).trim().match(/^(\d{1,2})\/(\d{4})$/);
+          if (mm) khoa = `${mm[2]}-${mm[1].padStart(2, '0')}`;
+          else { const dd = this._ngayTuO(tO); if (dd) khoa = this._khoaThang(dd); }
+          if (!khoa) { canhBao.push(`SỐ NHẬP THÁNG: dòng ${i + 1} có Tháng "${tO ?? ''}" không đọc được — bỏ qua.`); continue; }
+          const so = this._soTuO(d[iCot + 1]);
+          if (so !== null && isNaN(so)) {
+            canhBao.push(`SỐ NHẬP THÁNG: tháng ${this._thangChu(khoa)} có Giá trị không đọc được thành số — dùng ước tính.`);
+            continue;
+          }
+          if (so === null) continue;                         // ô trống = chưa chốt số
+          if (thang[khoa] != null) {
+            loi.push(`SỐ NHẬP THÁNG: tháng ${this._thangChu(khoa)} có hơn một dòng thực trả TK nhân viên — sửa lại file.`);
+            continue;
+          }
+          thang[khoa] = so;
+        }
+      });
+    });
+    if (!coBang) loi.push('Tab SỐ NHẬP THÁNG: không tìm thấy bảng có tiêu đề Tháng · Mục · Giá trị.');
+
+    return { ngay, danhMuc, thang, loi, canhBao };
+  },
+
+  /** Tính các con số của thẻ. Trả về { thieu: [...] } nếu chưa đủ dữ liệu để tính. */
+  _tinhQuyAds(cauHinh, ads) {
+    const thieu = [];
+    if (cauHinh.dauKy === null) thieu.push(cauHinh.dauKyLoi ? 'Số dư quỹ đầu kỳ không đọc được thành số' : 'Chưa cài Số dư quỹ đầu kỳ');
+    if (!cauHinh.moc)          thieu.push(cauHinh.mocLoi ? 'Ngày mốc không đọc được' : 'Chưa cài Ngày mốc');
+    if (thieu.length) return { thieu };
+
+    const heSo = cauHinh.heSo;
+    const mocHet = new Date(cauHinh.moc); mocHet.setHours(23, 59, 59, 999);
+    const homNay = new Date(); homNay.setHours(23, 59, 59, 999);
+    const sauMoc = (d) => d && d > mocHet && d <= homNay;
+    const N = (s) => this._nhanCot(s);
+    const canhBao = [];
+
+    // Sổ quỹ
+    let daUng = 0, hoanUng = 0, soKhoanUng = 0, soKhoanHoan = 0;
+    (this._taiChinhManualData || []).forEach(r => {
+      if (!sauMoc(r.parsedDate)) return;
+      const loai = this._chuanChu(r.loai), hm = this._chuanChu(r.hang_muc);
+      if (loai === 'Chi' && hm === this.HM_UNG_SALE)  { daUng += r.so_tien;   soKhoanUng++; }
+      if (loai === 'Thu' && hm === this.HM_HOAN_UNG)  { hoanUng += r.so_tien; soKhoanHoan++; }
+    });
+
+    // Phân loại dòng ADS NGÀY theo TK
+    const maLa = {};   // mã -> 'nv' | 'khac' | 'khongco' | 'trongtk'
+    const loaiCuaMa = (ma) => {
+      const k = N(ma);
+      if (maLa[k]) return maLa[k];
+      const tk = ads.danhMuc[k];
+      maLa[k] = (tk === undefined) ? 'khongco' : (tk === '' ? 'trongtk' : (N(tk) === 'tk nhân viên' ? 'nv' : 'khac'));
+      return maLa[k];
+    };
+    const maKhongCo = new Set(), maTrongTk = new Set();
+    const ghiLoiMa = (r) => {
+      const l = loaiCuaMa(r.ma);
+      if (l === 'khongco') maKhongCo.add(r.ma);
+      if (l === 'trongtk') maTrongTk.add(r.ma);
+      return l;
+    };
+
+    // Các tháng cần tính: từ tháng của (mốc + 1 ngày) tới tháng hiện tại
+    const thangList = [];
+    const batDau = new Date(cauHinh.moc); batDau.setDate(batDau.getDate() + 1);
+    let con = new Date(batDau.getFullYear(), batDau.getMonth(), 1);
+    const cuoi = new Date(homNay.getFullYear(), homNay.getMonth(), 1);
+    while (con <= cuoi) { thangList.push(this._khoaThang(con)); con = new Date(con.getFullYear(), con.getMonth() + 1, 1); }
+
+    const chiTiet = [];
+    let daTieu = 0;
+    thangList.forEach(khoa => {
+      const [y, m] = khoa.split('-').map(Number);
+      const dauThang = new Date(y, m - 1, 1);
+      const thuc = ads.thang[khoa];
+      if (dauThang > mocHet && thuc != null) {
+        chiTiet.push({ khoa, cach: 'thuc', so: thuc });
+        daTieu += thuc;
+        return;
+      }
+      let tong = 0, soDong = 0;
+      ads.ngay.forEach(r => {
+        if (!sauMoc(r.date) || this._khoaThang(r.date) !== khoa) return;
+        if (ghiLoiMa(r) !== 'nv') return;
+        tong += r.chi; soDong++;
+      });
+      const so = Math.round(tong * heSo);
+      chiTiet.push({ khoa, cach: 'uoc', so, soDong });
+      daTieu += so;
+    });
+
+    // Ngày cuối có số trong ADS NGÀY + trung bình 7 ngày gần nhất (TK nhân viên)
+    const ngayCoSo = [...new Set(ads.ngay.map(r => r.date.getTime()))].sort((a, b) => b - a);
+    const ngayCuoi = ngayCoSo.length ? new Date(ngayCoSo[0]) : null;
+    const bayNgay = new Set(ngayCoSo.slice(0, 7));
+    let tong7 = 0;
+    ads.ngay.forEach(r => {
+      if (!bayNgay.has(r.date.getTime())) return;
+      if (ghiLoiMa(r) === 'nv') tong7 += r.chi;
+    });
+    const soNgayTB = bayNgay.size;
+    const tbNgay = soNgayTB ? (tong7 / soNgayTB) * heSo : 0;
+
+    const conLai = cauHinh.dauKy + daUng - hoanUng - daTieu;
+    const soNgayDu = tbNgay > 0 ? conLai / tbNgay : null;
+
+    if (maKhongCo.size) canhBao.push(`Mã bài không có trong DANH MỤC (chưa tính vào Đã tiêu): ${[...maKhongCo].join(', ')}.`);
+    if (maTrongTk.size) canhBao.push(`Mã bài chưa điền cột "TK quảng cáo" trong DANH MỤC (chưa tính): ${[...maTrongTk].join(', ')}.`);
+    chiTiet.forEach(c => {
+      if (c.cach === 'uoc' && !c.soDong) canhBao.push(`Tháng ${this._thangChu(c.khoa)}: chưa có số thực trả và chưa có dòng ADS NGÀY nào của TK nhân viên — đang tính 0.`);
+    });
+
+    return { daUng, hoanUng, daTieu, conLai, chiTiet, ngayCuoi, tbNgay, soNgayTB, soNgayDu,
+             heSo, soKhoanUng, soKhoanHoan, canhBao };
+  },
+
+  _qaHienCaiDat: false,
+  _tctMoCaiDatQuyAds() { this._qaHienCaiDat = !this._qaHienCaiDat; this._veTheQuyAds(); },
+
+  /** Vẽ thẻ Quỹ ads vào #tct-quy-ads (gọi lại được bất cứ lúc nào). */
+  _veTheQuyAds() {
+    const o = document.getElementById('tct-quy-ads');
+    if (!o) return;
+    const s = this._quyAds || {};
+    const esc = (x) => this._escHtml(x);
+    const vnd = (x) => this._formatVND(Math.round(x));
+    const hopLoi = (dong, mau = '#C62828', nen = 'rgba(198,40,40,0.08)') =>
+      `<div style="background:${nen}; color:${mau}; border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.55;">${dong}</div>`;
+
+    const ch = s.cauHinh;
+    const thieuCaiDat = !ch || ch.dauKy === null || !ch.moc;
+    const hienCaiDat = this._qaHienCaiDat || (ch && thieuCaiDat);
+
+    // Khung cài đặt
+    let caiDat = '';
+    if (ch && hienCaiDat) {
+      const dauKyHien = ch.dauKy === null ? '' : String(Math.round(ch.dauKy)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      const heSoHien = String(ch.heSo).replace('.', ',');
+      caiDat = `
+        <div style="border:1px dashed var(--clr-border-light); border-radius:10px; padding:14px; margin-top:14px;">
+          <div style="font-size:13px; font-weight:600; margin-bottom:10px;">Cài đặt quỹ ads (nhập một lần, đổi mốc thì sửa ở đây)</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; align-items:end;">
+            <div>
+              <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Số dư quỹ đầu kỳ (VNĐ)</label>
+              <input type="text" id="qa-dauky" class="form-input" style="width:100%;" placeholder="VD: 5,000,000" value="${esc(dauKyHien)}"
+                     oninput="this.value = this.value.replace(/[^0-9-]/g, '').replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',')">
+            </div>
+            <div>
+              <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Ngày mốc (số dư tính đến hết ngày này)</label>
+              <input type="date" id="qa-moc" class="form-input" style="width:100%;" value="${ch.moc ? this._formatDateInput(ch.moc) : ''}">
+            </div>
+            <div>
+              <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Hệ số ước tính (VAT)</label>
+              <input type="text" id="qa-heso" class="form-input" style="width:100%;" placeholder="1,1" value="${esc(heSoHien)}">
+            </div>
+            <div><button class="btn btn-primary btn-sm" id="qa-btn-luu" onclick="App._luuCaiDatQuyAds()" style="width:100%;">Lưu cài đặt</button></div>
+          </div>
+        </div>`;
+    }
+
+    let than = '';
+    if (s.dangTai) {
+      than = `<div style="font-size:13px; color:var(--clr-text-muted); padding:8px 0;">Đang đọc file PXDE - CHIẾN DỊCH ADS...</div>`;
+    } else if (s.loiCauHinh) {
+      than = hopLoi(esc(s.loiCauHinh) + '<br>Tạo tab này với ô A1 = <b>khoa</b>, B1 = <b>gia_tri</b> rồi tải lại trang.');
+    } else if (s.loiAds) {
+      than = hopLoi('<b>Không tính được Quỹ ads.</b> ' + esc(s.loiAds));
+    } else if (s.ads && s.ads.loi.length) {
+      than = hopLoi('<b>Không tính được Quỹ ads — dữ liệu file ADS chưa đủ:</b><br>• ' + s.ads.loi.map(esc).join('<br>• '));
+    } else if (ch && s.ads) {
+      const kq = this._tinhQuyAds(ch, s.ads);
+      if (kq.thieu) {
+        than = hopLoi('<b>Chưa đủ cài đặt để tính:</b><br>• ' + kq.thieu.map(esc).join('<br>• '), '#8A5A00', 'rgba(243,156,18,0.12)');
+      } else {
+        const oSo = (nhan, so, phu, mau = 'var(--clr-text)') => `
+          <div style="background:rgba(0,0,0,0.025); border-radius:10px; padding:12px 14px;">
+            <div style="font-size:12px; color:var(--clr-text-muted); font-weight:600; letter-spacing:0.3px;">${nhan}</div>
+            <div style="font-size:18px; font-weight:700; margin-top:4px; color:${mau};">${so}</div>
+            ${phu ? `<div style="font-size:11px; color:var(--clr-text-muted); margin-top:2px;">${phu}</div>` : ''}
+          </div>`;
+        const het = kq.conLai <= 0;
+        let duChay;
+        if (het) {
+          duChay = `<span style="color:#C62828; font-weight:700;">Quỹ đã hết${kq.conLai < 0 ? ' (âm ' + vnd(-kq.conLai) + ')' : ''}</span>`;
+        } else if (kq.soNgayDu === null) {
+          duChay = `<span style="color:var(--clr-text-muted);">Chưa tính được số ngày — ${kq.soNgayTB ? kq.soNgayTB + ' ngày gần nhất TK nhân viên không tiêu' : 'ADS NGÀY chưa có số'}.</span>`;
+        } else {
+          const n = Math.floor(kq.soNgayDu);
+          const do3 = kq.soNgayDu < 3;
+          duChay = `<span style="color:${do3 ? '#C62828' : '#2E7D32'}; font-weight:700;">Đủ chạy khoảng ${n} ngày</span>
+            <span style="color:var(--clr-text-muted);"> · trung bình ${vnd(kq.tbNgay)}/ngày (${kq.soNgayTB} ngày gần nhất × ${String(kq.heSo).replace('.', ',')})</span>`;
+        }
+        const cachTinh = kq.chiTiet.map(c => c.cach === 'thuc'
+          ? `${this._thangChu(c.khoa)}: thực trả ${vnd(c.so)}`
+          : `${this._thangChu(c.khoa)}: ước tính ${vnd(c.so)}`).join(' · ');
+
+        than = `
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; align-items:stretch;">
+            ${oSo('ĐÃ ỨNG', vnd(kq.daUng), kq.soKhoanUng + ' khoản')}
+            ${oSo('HOÀN ỨNG', vnd(kq.hoanUng), kq.soKhoanHoan + ' khoản')}
+            ${oSo('ĐÃ TIÊU', vnd(kq.daTieu), 'TK nhân viên')}
+            <div style="background:${het ? 'rgba(198,40,40,0.08)' : 'linear-gradient(135deg,#3F3428,#5A4A38)'}; color:${het ? '#C62828' : '#F5EFE6'}; border-radius:10px; padding:12px 14px;">
+              <div style="font-size:12px; font-weight:700; letter-spacing:0.5px; opacity:0.9;">CÒN LẠI</div>
+              <div style="font-size:26px; font-weight:800; margin-top:2px;">${vnd(kq.conLai)}</div>
+            </div>
+          </div>
+          <div style="font-size:13px; margin-top:12px;">${duChay}</div>
+          <div style="font-size:12px; color:var(--clr-text-muted); margin-top:8px; line-height:1.6;">
+            ${vnd(ch.dauKy)} (đầu kỳ) + ${vnd(kq.daUng)} − ${vnd(kq.hoanUng)} − ${vnd(kq.daTieu)} = <b>${vnd(kq.conLai)}</b><br>
+            Ước tính đến ngày ${kq.ngayCuoi ? this._ngayChu(kq.ngayCuoi) : '(chưa có)'}; tháng đã chốt dùng số thực trả.
+            ${cachTinh ? '<br>' + esc(cachTinh) : ''}
+            ${ch.heSoMacDinh ? '<br>Hệ số ước tính: 1,1 (mặc định).' : ''}
+          </div>
+          ${[...(s.ads.canhBao || []), ...kq.canhBao].length
+            ? '<div style="margin-top:10px;">' + hopLoi('<b>Lưu ý dữ liệu:</b><br>• ' + [...s.ads.canhBao, ...kq.canhBao].map(esc).join('<br>• '), '#8A5A00', 'rgba(243,156,18,0.12)') + '</div>'
+            : ''}`;
+      }
+    }
+
+    o.innerHTML = `
+      <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px; font-weight:700; letter-spacing:0.5px;">QUỸ ADS ĐÃ ỨNG CHO SALE</div>
+            <div style="font-size:12px; color:var(--clr-text-muted); margin-top:2px;">
+              Chỉ tính TK nhân viên${ch && ch.moc ? ' · từ sau ngày mốc ' + this._ngayChu(ch.moc) : ''}
+            </div>
+          </div>
+          ${ch ? `<button class="btn btn-outline btn-sm" onclick="App._tctMoCaiDatQuyAds()">${hienCaiDat && !thieuCaiDat ? 'Đóng cài đặt' : 'Cài đặt'}</button>` : ''}
+        </div>
+        ${than}
+        ${caiDat}
+      </div>`;
+  },
+
+  /** Lưu 3 ô cài đặt vào tab CAU_HINH_TONG (ghi đè dòng có sẵn, thiếu thì thêm). */
+  async _luuCaiDatQuyAds() {
+    const dauKyRaw = (document.getElementById('qa-dauky')?.value || '').trim();
+    const mocRaw   = (document.getElementById('qa-moc')?.value || '').trim();
+    const heSoRaw  = (document.getElementById('qa-heso')?.value || '').trim();
+
+    if (dauKyRaw === '') { this._showToast('Vui lòng nhập Số dư quỹ đầu kỳ (có thể là 0).', 'error'); return; }
+    const dauKy = parseInt(dauKyRaw.replace(/[^0-9-]/g, ''), 10);
+    if (isNaN(dauKy)) { this._showToast('Số dư quỹ đầu kỳ không hợp lệ.', 'error'); return; }
+    if (!mocRaw) { this._showToast('Vui lòng chọn Ngày mốc.', 'error'); return; }
+    const heSo = heSoRaw === '' ? this.QA_HE_SO_MAC_DINH : parseFloat(heSoRaw.replace(',', '.'));
+    if (!(heSo >= 1 && heSo <= 2)) { this._showToast('Hệ số phải trong khoảng 1 đến 2 (VD: 1,1).', 'error'); return; }
+    const [y, m, d] = mocRaw.split('-');
+    const moc = `${d}/${m}/${y}`;
+
+    const btn = document.getElementById('qa-btn-luu');
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Đang lưu...'; }
+    try {
+      const tab = CONFIG.SHEETS.CAU_HINH_TONG;
+      // Đọc lại ngay trước khi ghi, để biết dòng nào đã có
+      const [vung] = await this._docSoThat(CONFIG.SPREADSHEET_ID, [`${this._tenTabA1(tab)}!A:B`]);
+      const ch = this._docCauHinhQuyAds(vung).raw;
+      const giaTri = [
+        [this.QA_KHOA.DAU_KY, dauKy],
+        [this.QA_KHOA.MOC, moc],
+        [this.QA_KHOA.HE_SO, heSo],
+      ];
+      const themMoi = [];
+      if (!ch._coTieuDe && ch._soDong === 0) themMoi.push(['khoa', 'gia_tri']);
+      for (const [k, v] of giaTri) {
+        if (ch._dong[k]) await this._writeSheet(tab, `B${ch._dong[k]}`, [[v]]);
+        else themMoi.push([k, v]);
+      }
+      if (themMoi.length) await this._appendSheet(tab, themMoi);
+      this._showToast('Đã lưu cài đặt Quỹ ads.', 'success');
+      this._qaHienCaiDat = false;
+      this._napQuyAds();
+    } catch (e) {
+      console.error(e);
+      this._showToast(`Lỗi lưu cài đặt: ${e.message}`, 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Lưu cài đặt'; }
     }
   },
 
