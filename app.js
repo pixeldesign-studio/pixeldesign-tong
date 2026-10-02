@@ -6821,7 +6821,12 @@ const App = {
       loi.push('Tab ADS NGÀY: không tìm thấy dòng tiêu đề có chữ "Mã bài".');
     } else {
       const h = vNgay[hNgay].map(N);
-      const cNgay = h.indexOf('ngày'), cMa = h.indexOf('mã bài'), cChi = h.indexOf('chi tiêu');
+      // Khớp đúng nhãn, hoặc nhãn kèm đơn vị trong ngoặc — VD file thật ghi "Chi tiêu (đ)"
+      const timCot = (ten) => {
+        const i = h.indexOf(ten);
+        return i >= 0 ? i : h.findIndex(x => x.startsWith(ten + ' ('));
+      };
+      const cNgay = timCot('ngày'), cMa = timCot('mã bài'), cChi = timCot('chi tiêu');
       const thieu = [];
       if (cNgay < 0) thieu.push('Ngày');
       if (cChi < 0)  thieu.push('Chi tiêu');
@@ -6990,8 +6995,11 @@ const App = {
     const conLai = cauHinh.dauKy + daUng - hoanUng - daTieu;
     const soNgayDu = tbNgay > 0 ? conLai / tbNgay : null;
 
-    if (maKhongCo.size) canhBao.push(`Mã bài không có trong DANH MỤC (chưa tính vào Đã tiêu): ${[...maKhongCo].join(', ')}.`);
-    if (maTrongTk.size) canhBao.push(`Mã bài chưa điền cột "TK quảng cáo" trong DANH MỤC (chưa tính): ${[...maTrongTk].join(', ')}.`);
+    // Mã bài chưa biết thuộc TK nào thì KHÔNG đoán: dừng, báo rõ cần điền gì
+    const chuaPhanLoai = [];
+    if (maKhongCo.size) chuaPhanLoai.push(`Mã bài có trong ADS NGÀY nhưng chưa khai ở DANH MỤC: ${[...maKhongCo].join(', ')}.`);
+    if (maTrongTk.size) chuaPhanLoai.push(`Mã bài chưa điền cột "TK quảng cáo" ở DANH MỤC (ghi "TK nhân viên" hoặc "TK anh Hải"): ${[...maTrongTk].join(', ')}.`);
+    if (chuaPhanLoai.length) return { thieu: chuaPhanLoai };
     chiTiet.forEach(c => {
       if (c.cach === 'uoc' && !c.soDong) canhBao.push(`Tháng ${this._thangChu(c.khoa)}: chưa có số thực trả và chưa có dòng ADS NGÀY nào của TK nhân viên — đang tính 0.`);
     });
@@ -7056,7 +7064,7 @@ const App = {
     } else if (ch && s.ads) {
       const kq = this._tinhQuyAds(ch, s.ads);
       if (kq.thieu) {
-        than = hopLoi('<b>Chưa đủ cài đặt để tính:</b><br>• ' + kq.thieu.map(esc).join('<br>• '), '#8A5A00', 'rgba(243,156,18,0.12)');
+        than = hopLoi('<b>Chưa tính được Quỹ ads:</b><br>• ' + kq.thieu.map(esc).join('<br>• '), '#8A5A00', 'rgba(243,156,18,0.12)');
       } else {
         const oSo = (nhan, so, phu, mau = 'var(--clr-text)') => `
           <div style="background:rgba(0,0,0,0.025); border-radius:10px; padding:12px 14px;">
