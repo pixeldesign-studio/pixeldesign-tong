@@ -6514,6 +6514,7 @@ const App = {
     });
     const hmCoDinh = [...this.TCT_HANG_MUC.Chi, ...this.TCT_HANG_MUC.Thu];
     const hmCu = [...new Set((this._taiChinhManualData || [])
+      .filter(r => (r.loai || '').trim() !== 'Chuyển TK')
       .map(r => this._chuanChu(r.hang_muc)).filter(h => h && !hmCoDinh.includes(h)))].sort((a, b) => a.localeCompare(b, 'vi'));
     const coHMTrong = (this._taiChinhManualData || []).some(r => !this._chuanChu(r.hang_muc));
     const opt = (v, nhan) => `<option value="${this._escHtml(v)}" ${locHM === v ? 'selected' : ''}>${this._escHtml(nhan)}</option>`;
@@ -6526,49 +6527,16 @@ const App = {
     const tongThuTong = tongThuTuDong + tongThuThuCong;
     const soDu = tongThuTong - tongChiThuCong;   // chenh lech RIENG trong ky da loc
 
-    // ── SO DU THUC TE TRONG TAI KHOAN ────────────────────────────
-    // Khong phu thuoc bo loc ky: cong tat ca tu truoc toi nay.
-    //   so du dau ky + moi khoan vao - moi khoan ra
-    // "So du dau" la ban ghi trong TAI_CHINH_TONG co cot loai = "Số dư đầu".
-    let soDuDau = 0;
-    let coSoDuDau = false;
-    let ngayChotSoDu = null;      // moc thoi gian cua ban ghi "So du dau"
-    let thuTatCa = 0, chiTatCa = 0;
+    // ── SỐ DƯ THỰC TẾ: TÍNH RIÊNG TỪNG TÀI KHOẢN, RỒI CỘNG ──────
+    // Không phụ thuộc bộ lọc kỳ. Chuyển giữa 2 TK không làm đổi tổng.
+    const sdPixel = this._tinhSoDuTK(this.TK_PIXEL);
+    const sdEtsy  = this._tinhSoDuTK(this.TK_ETSY);
+    const soDuThucTe = sdPixel.soDu + sdEtsy.soDu;
+    // Giữ tên biến cũ cho phần dưới (theo TK Pixel — TK có ngày chốt sổ chung)
+    const soDuDau = sdPixel.soDuDau, coSoDuDau = sdPixel.coChot, ngayChotSoDu = sdPixel.ngayChot;
+    const mocSoDu = sdPixel.moc;
     const homNay = new Date(); homNay.setHours(23, 59, 59, 999);
-
-    // B1: tim ban ghi "So du dau" (neu khai nhieu lan thi lay ban MOI NHAT)
-    (this._taiChinhManualData || []).forEach(r => {
-      if ((r.loai || '').trim() !== 'Số dư đầu') return;
-      if (!ngayChotSoDu || r.parsedDate > ngayChotSoDu) {
-        ngayChotSoDu = r.parsedDate;
-        soDuDau = r.so_tien;
-        coSoDuDau = true;
-      }
-    });
-
-    // B2: ban ghi "So du dau" duoc hieu la SO DU CUOI NGAY do.
-    // Nen chi cong cac khoan phat sinh TU NGAY HOM SAU tro di.
-    // Neu cong ca lich su truoc do thi so du se bi doi len nhieu lan,
-    // vi so du chot DA BAO GOM toan bo tien kiem duoc truoc do roi.
-    let mocSoDu = null;
-    if (ngayChotSoDu) {
-      mocSoDu = new Date(ngayChotSoDu);
-      mocSoDu.setHours(23, 59, 59, 999);   // het ngay chot
-    }
     const trongPhamVi = (d) => d <= homNay && (!mocSoDu || d > mocSoDu);
-
-    (this._taiChinhManualData || []).forEach(r => {
-      const l = (r.loai || '').trim();
-      if (l === 'Số dư đầu') return;
-      if (!trongPhamVi(r.parsedDate)) return;
-      if (l === 'Thu') thuTatCa += r.so_tien;
-      else if (l === 'Chi') chiTatCa += r.so_tien;
-    });
-    (this._taiChinhAutoData || []).forEach(r => {
-      if (!trongPhamVi(r.parsedDate)) return;
-      thuTatCa += r.so_tien;
-    });
-    const soDuThucTe = soDuDau + thuTatCa - chiTatCa;
 
     // Nợ TK BIDV: tính từ sau ngày chốt sổ (như Số dư thực tế) + nợ đầu kỳ khai trong Cài đặt
     let bidvVaoLk = 0, bidvTraLk = 0;
@@ -6646,20 +6614,31 @@ const App = {
           </div>
         </div>
 
-        <!-- SO DU THUC TE TRONG TAI KHOAN -->
-        <div style="background:${coSoDuDau ? 'linear-gradient(135deg,#3F3428,#5A4A38)' : 'var(--clr-card)'}; color:${coSoDuDau ? '#F5EFE6' : 'var(--clr-text)'}; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px 24px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
-          <div>
-            <div style="font-size:13px; opacity:0.85; font-weight:600; letter-spacing:0.5px;">SỐ DƯ HIỆN TẠI TRONG TÀI KHOẢN</div>
-            <div style="font-size:28px; font-weight:800; margin-top:4px;">${this._formatVND(soDuThucTe)}</div>
-            <div style="font-size:12px; opacity:0.8; margin-top:6px;">
-              ${coSoDuDau
-                ? `Chốt cuối ngày ${ngayChotStr}: ${this._formatVND(soDuDau)} + đã thu ${this._formatVND(thuTatCa)} − đã chi ${this._formatVND(chiTatCa)} (tính từ ngày kế tiếp trở đi, đã gồm tiền qua lại TK BIDV)`
-                : 'Chưa khai Số dư đầu — con số này chỉ là thu trừ chi, chưa phải số dư thật.'}
+        <!-- SỐ DƯ THỰC TẾ: TỔNG + TỪNG TÀI KHOẢN -->
+        <div style="background:${coSoDuDau ? 'linear-gradient(135deg,#3F3428,#5A4A38)' : 'var(--clr-card)'}; color:${coSoDuDau ? '#F5EFE6' : 'var(--clr-text)'}; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px 24px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
+            <div>
+              <div style="font-size:13px; opacity:0.85; font-weight:600; letter-spacing:0.5px;">TỔNG SỐ DƯ HIỆN TẠI (2 TÀI KHOẢN)</div>
+              <div style="font-size:28px; font-weight:800; margin-top:4px;">${this._formatVND(soDuThucTe)}</div>
             </div>
+            ${coSoDuDau ? '' : `<div style="font-size:12px; max-width:340px; background:rgba(198,40,40,0.08); color:#C62828; border-radius:8px; padding:10px 12px; line-height:1.5;">
+              Để con số này khớp ngân hàng: thêm <b>một</b> khoản Loại = <b>Số dư chốt sổ</b>, chọn đúng <b>Tài khoản</b>, ngày là <b>ngày chốt sổ</b>, số tiền là <b>số dư cuối ngày hôm đó</b>.
+            </div>`}
           </div>
-          ${coSoDuDau ? '' : `<div style="font-size:12px; max-width:340px; background:rgba(198,40,40,0.08); color:#C62828; border-radius:8px; padding:10px 12px; line-height:1.5;">
-            Để con số này khớp tài khoản ngân hàng: thêm <b>một</b> khoản Loại = <b>Số dư đầu</b>, ngày là <b>ngày chốt sổ</b>, số tiền là <b>số dư cuối ngày hôm đó</b>. App chỉ cộng thu và trừ chi <b>từ ngày kế tiếp</b> trở đi.
-          </div>`}
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+            ${[sdPixel, sdEtsy].map(sd => {
+              const nc = sd.ngayChot ? `${String(sd.ngayChot.getDate()).padStart(2,'0')}/${String(sd.ngayChot.getMonth()+1).padStart(2,'0')}/${sd.ngayChot.getFullYear()}` : '';
+              const chuyen = (sd.chuyenVao || sd.chuyenRa) ? ` + chuyển vào ${this._formatVND(sd.chuyenVao)} − chuyển đi ${this._formatVND(sd.chuyenRa)}` : '';
+              return `<div style="background:rgba(255,255,255,${coSoDuDau ? '0.08' : '0.6'}); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:12px 14px;">
+                <div style="font-size:12px; font-weight:700; letter-spacing:0.3px; opacity:0.85;">${this._escHtml(sd.tk.toUpperCase())}</div>
+                <div style="font-size:20px; font-weight:800; margin-top:2px;">${this._formatVND(sd.soDu)}</div>
+                <div style="font-size:11.5px; opacity:0.8; margin-top:4px; line-height:1.5;">
+                  ${sd.coChot ? `Chốt cuối ngày ${nc}: ${this._formatVND(sd.soDuDau)}` : 'Chưa khai số chốt — tính từ 0'}
+                  + thu ${this._formatVND(sd.thu)} − chi ${this._formatVND(sd.chi)}${chuyen}
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
         </div>
 
         <!-- CHUYỂN VỚI TK CÁ NHÂN BIDV (vẽ bởi _veTheBidv) -->
@@ -6680,10 +6659,18 @@ const App = {
               </div>
             </div>
             <div>
+              <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Tài khoản</label>
+              <select id="tct-taikhoan" class="form-select" style="width:100%;" onchange="App._tctDoiLoai(true)">
+                <option value="${this.TK_PIXEL}">${this.TK_PIXEL}</option>
+                <option value="${this.TK_ETSY}">${this.TK_ETSY}</option>
+              </select>
+            </div>
+            <div>
               <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Loại</label>
               <select id="tct-loai" class="form-select" style="width:100%;" onchange="App._tctDoiLoai()">
                 <option value="Thu">Thu</option>
                 <option value="Chi">Chi</option>
+                <option value="Chuyển TK">Chuyển giữa 2 TK</option>
                 <option value="Số dư đầu">Số dư chốt sổ (số dư cuối ngày)</option>
               </select>
             </div>
@@ -6694,6 +6681,10 @@ const App = {
             <div id="tct-hangmuc-khung">
               <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Hạng mục</label>
               <select id="tct-hangmuc" class="form-select" style="width:100%;" onchange="App._tctDoiHangMuc()"></select>
+            </div>
+            <div id="tct-chuyen-khung" style="display:none;">
+              <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Chuyển</label>
+              <div id="tct-chuyen-mota" style="padding:10px 12px; border-radius:8px; background:rgba(138,114,76,0.08); font-size:13px; font-weight:600;"></div>
             </div>
           </div>
           <div style="display:flex; gap:16px; align-items:end; margin-top:16px;">
@@ -6749,6 +6740,7 @@ const App = {
                 <thead>
                   <tr style="background:rgba(0,0,0,0.02); color:var(--clr-text-muted); font-size:13px; text-transform:uppercase; letter-spacing:0.05em; text-align:left;">
                     <th style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">Ngày</th>
+                    <th style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">Tài khoản</th>
                     <th style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); width:80px;">Loại</th>
                     <th style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right;">Số tiền</th>
                     <th style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">Hạng mục</th>
@@ -6759,14 +6751,15 @@ const App = {
                   ${bangSoQuy.length > 0 ? bangSoQuy.map(r => `
                     <tr class="table-row-hover">
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(this._ngayHienThi(r.ngay))}</td>
+                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); font-size:13px; white-space:nowrap;">${this._escHtml(this._tkCua(r))}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">
-                        <span style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:600; background:${r.loai === 'Thu' ? 'rgba(39,174,96,0.1)' : 'rgba(231,76,60,0.1)'}; color:${r.loai === 'Thu' ? '#27AE60' : '#E74C3C'};">${this._escHtml(r.loai)}</span>
+                        <span style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:600; background:${r.loai === 'Thu' ? 'rgba(39,174,96,0.1)' : (r.loai === 'Chuyển TK' ? 'rgba(138,114,76,0.12)' : 'rgba(231,76,60,0.1)')}; color:${r.loai === 'Thu' ? '#27AE60' : (r.loai === 'Chuyển TK' ? '#6B5E52' : '#E74C3C')};">${this._escHtml(r.loai === 'Chuyển TK' ? 'Chuyển' : r.loai)}</span>
                       </td>
-                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600; color:${r.loai === 'Thu' ? '#27AE60' : '#E74C3C'};">${this._formatVND(r.so_tien)}</td>
-                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(r.hang_muc)}</td>
+                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); text-align:right; font-weight:600; color:${r.loai === 'Thu' ? '#27AE60' : (r.loai === 'Chuyển TK' ? '#6B5E52' : '#E74C3C')};">${this._formatVND(r.so_tien)}</td>
+                      <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light);">${this._escHtml(r.loai === 'Chuyển TK' ? '→ ' + (r.hang_muc || '') : r.hang_muc)}</td>
                       <td style="padding:12px 20px; border-bottom:1px solid var(--clr-border-light); color:var(--clr-text-muted);">${this._escHtml(r.ghi_chu)}</td>
                     </tr>
-                  `).join('') : `<tr><td colspan="5" style="padding:24px; text-align:center; color:var(--clr-text-muted);">Không có giao dịch thủ công nào trong kỳ</td></tr>`}
+                  `).join('') : `<tr><td colspan="6" style="padding:24px; text-align:center; color:var(--clr-text-muted);">Không có giao dịch thủ công nào trong kỳ</td></tr>`}
                 </tbody>
               </table>
             </div>
@@ -6793,10 +6786,11 @@ const App = {
       this._showToast('Vui lòng nhập đủ Ngày, Loại và Số tiền.', 'error');
       return;
     }
-    if (!dsHM && loai !== 'Số dư đầu') {
+    if (!dsHM && loai !== 'Số dư đầu' && loai !== 'Chuyển TK') {
       this._showToast('Loại không hợp lệ.', 'error');
       return;
     }
+    const taiKhoan = document.getElementById('tct-taikhoan')?.value || this.TK_PIXEL;
     if (dsHM) {
       if (!hangMuc) { this._showToast('Vui lòng chọn Hạng mục.', 'error'); return; }
       if (!dsHM.includes(hangMuc)) { this._showToast('Hạng mục không nằm trong danh sách.', 'error'); return; }
@@ -6828,8 +6822,18 @@ const App = {
       const tab = CONFIG.SHEETS.TAI_CHINH_TONG;
       const [vung] = await this._docSoThat(this._getSpreadsheetIdFor(tab), [`${this._tenTabA1(tab)}!1:1`]);
       const tieuDe = ((vung && vung[0]) || []).map(h => this._chuanChu(h));
-      const giaTri = { ngay, loai, so_tien: soTien, hang_muc: hangMuc, ghi_chu: ghiChu };
+      const giaTri = { ngay, loai, so_tien: soTien,
+                       hang_muc: loai === 'Chuyển TK' ? this._tkKia(taiKhoan) : hangMuc,   // Chuyển TK: hạng mục = TK nhận
+                       ghi_chu: ghiChu };
       const thieu = Object.keys(giaTri).filter(k => !tieuDe.includes(k));
+      // Cột tai_khoan: Sheet cũ chưa có thì thêm tiêu đề vào ô trống kế tiếp ở dòng 1
+      if (!thieu.length && !tieuDe.includes('tai_khoan')) {
+        let n = tieuDe.length, cot = '';
+        do { cot = String.fromCharCode(65 + (n % 26)) + cot; n = Math.floor(n / 26) - 1; } while (n >= 0);
+        await this._writeSheet(tab, `${cot}1`, [['tai_khoan']]);
+        tieuDe.push('tai_khoan');
+      }
+      giaTri.tai_khoan = taiKhoan;
       if (thieu.length) throw new Error(`Tab ${tab} thiếu cột ${thieu.join(', ')} ở dòng 1 — chưa lưu gì.`);
       const row = tieuDe.map(t => (giaTri[t] !== undefined ? giaTri[t] : ''));
 
@@ -6843,6 +6847,54 @@ const App = {
       btn.innerHTML = oldText;
       btn.disabled = false;
     }
+  },
+
+  // ==========================================
+  // HAI TÀI KHOẢN NGÂN HÀNG CỦA CÔNG TY
+  // ------------------------------------------
+  // Cột `tai_khoan` trong TAI_CHINH_TONG. Ô trống = TK Pixel (mọi khoản cũ).
+  // Loại "Chuyển TK": tai_khoan = TK chuyển ĐI, hang_muc = TK nhận.
+  //   Không tính vào thu/chi, chỉ chuyển số dư giữa 2 TK.
+  // Mỗi TK có số dư chốt riêng (Loại "Số dư đầu" + tai_khoan). TK chưa khai
+  // chốt thì tính từ 0, cộng mọi khoản của TK đó.
+  // ==========================================
+  TK_PIXEL: 'TK Pixel',
+  TK_ETSY:  'TK Etsy (0838)',
+  _tkCua(r) {
+    return this._chuanChu(r && r.tai_khoan) === this.TK_ETSY ? this.TK_ETSY : this.TK_PIXEL;
+  },
+  _tkKia(tk) { return tk === this.TK_ETSY ? this.TK_PIXEL : this.TK_ETSY; },
+
+  /** Số dư thực tế của MỘT tài khoản (không phụ thuộc bộ lọc kỳ). */
+  _tinhSoDuTK(tk) {
+    const homNay = new Date(); homNay.setHours(23, 59, 59, 999);
+    const ds = this._taiChinhManualData || [];
+    let soDuDau = 0, coChot = false, ngayChot = null;
+    ds.forEach(r => {
+      if ((r.loai || '').trim() !== 'Số dư đầu' || this._tkCua(r) !== tk) return;
+      if (!ngayChot || r.parsedDate > ngayChot) { ngayChot = r.parsedDate; soDuDau = r.so_tien; coChot = true; }
+    });
+    let moc = null;
+    if (ngayChot) { moc = new Date(ngayChot); moc.setHours(23, 59, 59, 999); }   // số chốt = cuối ngày đó
+    const trong = (d) => d <= homNay && (!moc || d > moc);
+    let thu = 0, chi = 0, chuyenVao = 0, chuyenRa = 0;
+    ds.forEach(r => {
+      const l = (r.loai || '').trim();
+      if (l === 'Số dư đầu' || !trong(r.parsedDate)) return;
+      if (l === 'Chuyển TK') {
+        const den = this._chuanChu(r.hang_muc) === this.TK_ETSY ? this.TK_ETSY : this.TK_PIXEL;
+        if (this._tkCua(r) === tk) chuyenRa += r.so_tien;
+        if (den === tk) chuyenVao += r.so_tien;
+        return;
+      }
+      if (this._tkCua(r) !== tk) return;
+      if (l === 'Thu') thu += r.so_tien; else if (l === 'Chi') chi += r.so_tien;
+    });
+    if (tk === this.TK_PIXEL) {
+      (this._taiChinhAutoData || []).forEach(r => { if (trong(r.parsedDate)) thu += r.so_tien; });   // tiền Pixel về TK Pixel
+    }
+    return { tk, soDuDau, coChot, ngayChot, moc, thu, chi, chuyenVao, chuyenRa,
+             soDu: soDuDau + thu - chi + chuyenVao - chuyenRa };
   },
 
   // ==========================================
@@ -6886,11 +6938,20 @@ const App = {
   HM_HOAN_UNG:  'Quảng cáo – sale hoàn ứng',
 
   /** Đổi Loại trên form -> nạp lại danh sách Hạng mục (Số dư chốt sổ: ẩn ô). */
-  _tctDoiLoai() {
+  _tctDoiLoai(chiDoiTaiKhoan = false) {
     const loai  = document.getElementById('tct-loai')?.value;
     const khung = document.getElementById('tct-hangmuc-khung');
     const sel   = document.getElementById('tct-hangmuc');
     if (!khung || !sel) return;
+    // Chuyển giữa 2 TK: không có hạng mục, chỉ hiện "Từ … → Sang …"
+    const kChuyen = document.getElementById('tct-chuyen-khung');
+    const tk = document.getElementById('tct-taikhoan')?.value || this.TK_PIXEL;
+    if (kChuyen) {
+      kChuyen.style.display = loai === 'Chuyển TK' ? '' : 'none';
+      const mt = document.getElementById('tct-chuyen-mota');
+      if (mt) mt.textContent = `Từ ${tk}  →  Sang ${this._tkKia(tk)}`;
+    }
+    if (chiDoiTaiKhoan && this.TCT_HANG_MUC[loai]) return;   // giữ nguyên hạng mục đang chọn
     const ds = this.TCT_HANG_MUC[loai];
     if (!ds) {
       khung.style.display = 'none';
@@ -6906,6 +6967,9 @@ const App = {
   /** Chọn "Khác" / "Thu khác" -> nhãn Ghi chú chuyển thành bắt buộc. */
   _tctDoiHangMuc() {
     const hm   = document.getElementById('tct-hangmuc')?.value || '';
+    // Khoản Etsy thường đi qua TK Etsy (0838) -> gợi ý sẵn, ông vẫn đổi được
+    const oTk = document.getElementById('tct-taikhoan');
+    if (oTk && /^Etsy –/.test(hm)) { oTk.value = this.TK_ETSY; }
     const nhan = document.getElementById('tct-ghichu-nhan');
     const o    = document.getElementById('tct-ghichu');
     if (!nhan || !o) return;
