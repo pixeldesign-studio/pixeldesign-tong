@@ -5890,9 +5890,15 @@ const App = {
       if (r.source === 'pixel') tongPixel += tien;
       else if (r.source === 'etsy') tongEtsy += tien;
 
-      const dStr = this._ngayHienThi(r.ngayStr) || 'Chưa rõ';
+      // Khoá ngày lấy từ parsedDate (dd/mm/yyyy đủ 2 chữ số, bỏ giờ) để cùng một ngày
+      // luôn gộp vào một cột, dù chuỗi gốc ghi "1/10/2026" hay "01/10/2026 10:30".
+      const pd = r.parsedDate;
+      const coNgay = pd instanceof Date && !isNaN(pd) && pd.getTime() > 0;
+      const dStr = coNgay
+        ? `${String(pd.getDate()).padStart(2, '0')}/${String(pd.getMonth() + 1).padStart(2, '0')}/${pd.getFullYear()}`
+        : (this._ngayHienThi(r.ngayStr) || 'Chưa rõ');
       if (!dailyMap[dStr]) {
-        dailyMap[dStr] = { date: dStr, parsedDate: r.parsedDate, pixel: 0, etsy: 0, total: 0 };
+        dailyMap[dStr] = { date: dStr, parsedDate: coNgay ? new Date(pd.getFullYear(), pd.getMonth(), pd.getDate()) : r.parsedDate, pixel: 0, etsy: 0, total: 0, count: 0 };
       }
 
       dailyMap[dStr].total += tien;
@@ -5975,9 +5981,17 @@ const App = {
         <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; align-items:stretch;">
           <!-- Biểu đồ đường -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px; display:flex; flex-direction:column;">
-            <h3 style="margin:0 0 16px 0; font-size:16px; font-weight:600;">Xu hướng Doanh thu (Gộp vs Từng nguồn)</h3>
-            <div style="flex-grow:1; min-height:350px; position:relative;">
+            <h3 style="margin:0 0 10px 0; font-size:16px; font-weight:600;">Xu hướng Doanh thu theo ngày (Pixel + Etsy)</h3>
+            <div class="dt-doc" id="ptt-doc">
+              <div class="dt-doc-tren">
+                <span class="dt-doc-tien" id="ptt-doc-tien">—</span>
+                <span class="dt-doc-ngay" id="ptt-doc-ngay"></span>
+              </div>
+              <div class="dt-doc-duoi" id="ptt-doc-duoi"></div>
+            </div>
+            <div style="flex-grow:1; min-height:320px; position:relative; display:flex; justify-content:center; align-items:center;">
               <canvas id="ptt-chart-trend"></canvas>
+              <div id="ptt-chart-trend-empty" style="display:none; color:var(--clr-text-muted); font-size:14px; position:absolute;">Không có dữ liệu để vẽ biểu đồ</div>
             </div>
           </div>
 
@@ -6002,7 +6016,61 @@ const App = {
       </div>
     `;
 
-    setTimeout(() => this._initPhanTichTongCharts(dailyArr, tongPixel, tongEtsy), 100);
+    // Chèn cả ngày không có tiền về (giống app CRM). _chenNgayTrong trả về mới nhất trước.
+    const dailyDayDu = this._chenNgayTrong(dailyArr.slice(), startDate, endDate).reverse();
+    setTimeout(() => this._initPhanTichTongCharts(dailyDayDu, tongPixel, tongEtsy), 100);
+  },
+
+  /** Phân tích tổng: Chart.js gọi vào đây mỗi lần chạm/rê chuột trên biểu đồ xu hướng. */
+  _pttDocSoTrend(ctx) {
+    const tt = ctx && ctx.tooltip;
+    if (!tt || tt.opacity === 0 || !tt.dataPoints || !tt.dataPoints.length) { this._pttVeDocSo(null); return; }
+    this._pttVeDocSo(tt.dataPoints[0].dataIndex);
+  },
+
+  /** Phân tích tổng: vẽ khung đọc số. viTri = null nghĩa là lấy ngày mới nhất. */
+  _pttVeDocSo(viTri) {
+    const ds = this._pttTrendData || [];
+    const oTien = document.getElementById('ptt-doc-tien');
+    const oNgay = document.getElementById('ptt-doc-ngay');
+    const oDuoi = document.getElementById('ptt-doc-duoi');
+    const khung = document.getElementById('ptt-doc');
+    if (!oTien || !oNgay || !oDuoi) return;
+    if (!ds.length) { if (khung) khung.style.display = 'none'; return; }
+    if (khung) khung.style.display = '';
+
+    const k = (viTri == null || !ds[viTri]) ? ds.length - 1 : viTri;
+    const r = ds[k];
+    const cuoiKy = (k === ds.length - 1);
+    oTien.textContent = this._formatVND(r.tien);
+    oTien.style.color = r.tien < 0 ? '#C0392B' : 'var(--clr-text)';
+    oNgay.textContent = 'ngày ' + r.ngay + (cuoiKy ? ' · mới nhất' : '');
+
+    const phan = [];
+    if (r.tien === 0 && !r.pixel && !r.etsy) {
+      phan.push('<span class="dt-doc-chip bang">Không có tiền về trong ngày</span>');
+    } else if (r.truoc == null) {
+      phan.push('<span class="dt-doc-phu">ngày đầu tiên có tiền về trong kỳ</span>');
+    } else {
+      const chenh = r.tien - r.truoc;
+      if (chenh === 0) {
+        phan.push('<span class="dt-doc-chip bang">= bằng ngày trước đó</span>');
+      } else {
+        const len = chenh > 0;
+        phan.push(`<span class="dt-doc-chip ${len ? 'len' : 'xuong'}">`
+          + (len ? '&#9650; +' : '&#9660; −')
+          + this._formatVND(Math.abs(chenh)).replace(' đ', '')
+          + '</span><span class="dt-doc-phu">so với ngày trước đó</span>');
+      }
+    }
+    if (r.pixel || r.etsy) {
+      phan.push(`<span class="dt-doc-phu">&middot; Pixel ${this._soRutGon(r.pixel)} · Etsy ${this._soRutGon(r.etsy)}</span>`);
+    }
+    const tb = this._pttTrendTB || 0;
+    if (tb > 0 && r.tien > 0) {
+      phan.push(`<span class="dt-doc-phu">&middot; ${r.tien >= tb ? 'trên' : 'dưới'} mức trung bình kỳ (${this._soRutGon(tb)})</span>`);
+    }
+    oDuoi.innerHTML = phan.join(' ');
   },
 
   _initPhanTichTongCharts(dailyArr, tongPixel, tongEtsy) {
@@ -6028,68 +6096,118 @@ const App = {
       return gradient;
     };
 
-    // Biểu đồ đường
-    if (canvasTrend && dailyArr.length > 0) {
-      const labels = dailyArr.map(r => r.date.substring(0, 5));
-      const dataTotal = dailyArr.map(r => r.total);
-      const dataPixel = dailyArr.map(r => r.pixel);
-      const dataEtsy = dailyArr.map(r => r.etsy);
+    // Biểu đồ xu hướng — kiểu app CRM: cột theo ngày (Pixel + Etsy chồng nhau),
+    // đường trung bình 7 ngày, vạch trung bình kỳ, khung đọc số cố định phía trên.
+    const emptyTrend = document.getElementById('ptt-chart-trend-empty');
+    if (canvasTrend) {
+      if (!dailyArr || dailyArr.length === 0) {
+        canvasTrend.style.display = 'none';
+        if (emptyTrend) emptyTrend.style.display = 'block';
+        this._pttTrendData = [];
+        this._pttTrendTB = 0;
+        this._pttVeDocSo(null);
+      } else {
+        canvasTrend.style.display = 'block';
+        if (emptyTrend) emptyTrend.style.display = 'none';
 
-      this._pttCharts.trend = new Chart(canvasTrend, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Tổng gộp (VNĐ)',
-              data: dataTotal,
-              borderColor: '#8C7355',
-              backgroundColor: (c) => makeGrad(c, 140, 115, 85),
-              borderWidth: 2.5,
-              borderDash: [6, 4],
-              tension: 0.4,
-              fill: true,
-              pointRadius: 3,
-              pointBackgroundColor: '#8C7355',
-            },
-            {
-              label: 'Pixel (VNĐ)',
-              data: dataPixel,
-              borderColor: '#B7A88F',
-              backgroundColor: (c) => makeGrad(c, 183, 168, 143),
-              borderWidth: 2.5,
-              tension: 0.4,
-              fill: true,
-              pointRadius: 3,
-              pointBackgroundColor: '#B7A88F',
-            },
-            {
-              label: 'Etsy (VNĐ)',
-              data: dataEtsy,
-              borderColor: '#D8CBB8',
-              backgroundColor: (c) => makeGrad(c, 216, 203, 184),
-              borderWidth: 2.5,
-              tension: 0.4,
-              fill: true,
-              pointRadius: 3,
-              pointBackgroundColor: '#D8CBB8',
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: { labels: { color: '#6B5E52', font: { size: 12 }, boxWidth: 12, padding: 14 } },
-            tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + Number(c.raw).toLocaleString('vi-VN') + ' đ' } }
-          },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: '#9E8E82', font: { size: 11 } } },
-            y: { beginAtZero: true, grid: { color: 'rgba(100,80,60,0.03)', drawBorder: false }, ticks: { color: '#9E8E82', font: { size: 11 } } }
+        // dailyArr đã xếp cũ -> mới
+        const labels    = dailyArr.map(r => r.date.substring(0, 5));
+        const dataPixel = dailyArr.map(r => r.pixel || 0);
+        const dataEtsy  = dailyArr.map(r => r.etsy || 0);
+        const giaTri    = dailyArr.map(r => r.total || 0);
+        const soNgay    = giaTri.length;
+        const trungBinh = soNgay ? giaTri.reduce((x, y) => x + y, 0) / soNgay : 0;
+        const tb7 = giaTri.map((_, k) => {
+          const lat = giaTri.slice(Math.max(0, k - 6), k + 1);
+          return lat.reduce((x, y) => x + y, 0) / lat.length;
+        });
+
+        this._pttTrendData = dailyArr.map((r, k) => ({
+          ngay: r.date, tien: r.total || 0, pixel: r.pixel || 0, etsy: r.etsy || 0,
+          truoc: k > 0 ? giaTri[k - 1] : null,
+        }));
+        this._pttTrendTB = trungBinh;
+
+        const nhanTB = 'TB ' + this._soRutGon(trungBinh);
+        const duongTrungBinh = {
+          id: 'duongTrungBinhPtt',
+          afterDatasetsDraw(chart) {
+            if (!(trungBinh > 0)) return;
+            const { ctx, chartArea, scales } = chart;
+            const y = scales.y.getPixelForValue(trungBinh);
+            if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(138, 114, 76, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(chartArea.left, y);
+            ctx.lineTo(chartArea.right, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = '700 10px Inter, system-ui, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            const rong = ctx.measureText(nhanTB).width;
+            const x2 = chartArea.right - 2;
+            const x1 = x2 - rong - 10;
+            const cao = 15;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x1, y - cao / 2, rong + 10, cao, 7); ctx.fill(); }
+            else { ctx.fillRect(x1, y - cao / 2, rong + 10, cao); }
+            ctx.fillStyle = 'rgba(138, 114, 76, 0.95)';
+            ctx.fillText(nhanTB, x2 - 5, y);
+            ctx.restore();
           }
+        };
+
+        const cot = (label, data, mau) => ({
+          type: 'bar', label, data, backgroundColor: mau, stack: 'tien',
+          borderRadius: 4, borderSkipped: false, maxBarThickness: 44, order: 2,
+        });
+        const datasets = [
+          cot('Pixel', dataPixel, '#B7A88F'),
+          cot('Etsy', dataEtsy, '#8C7355'),
+        ];
+        if (soNgay >= 4) {
+          datasets.push({
+            type: 'line', label: 'Trung bình 7 ngày', data: tb7,
+            borderColor: '#3F3428', borderWidth: 2, pointRadius: 0, pointHitRadius: 0,
+            tension: 0.35, fill: false, order: 1,
+          });
         }
-      });
+
+        this._pttCharts.trend = new Chart(canvasTrend, {
+          data: { labels, datasets },
+          plugins: [duongTrungBinh],
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                display: true, position: 'bottom',
+                labels: { color: '#6B5E52', font: { size: 12 }, boxWidth: 12, padding: 14,
+                          filter: (it) => it.text !== 'Trung bình 7 ngày' || soNgay >= 4 },
+              },
+              tooltip: { enabled: false, external: (ctx) => this._pttDocSoTrend(ctx) },
+            },
+            scales: {
+              y: {
+                beginAtZero: true, stacked: true,
+                grid: { color: 'rgba(0,0,0,0.05)' },
+                ticks: { callback: (v) => this._soRutGon(v), font: { size: 11 } },
+              },
+              x: {
+                stacked: true, grid: { display: false },
+                ticks: { autoSkip: true, maxTicksLimit: 8, maxRotation: 0, font: { size: 11 } },
+              },
+            },
+          }
+        });
+
+        this._pttVeDocSo(null); // chưa chạm thì hiện ngày mới nhất
+      }
     }
 
     // Biểu đồ tròn
