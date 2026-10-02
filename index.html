@@ -8,7 +8,7 @@
   <title>PIXELDESIGN TỔNG</title>
 
   <!-- ── Cài lên màn hình chính điện thoại (PWA) ────────────── -->
-  <link rel="manifest" href="manifest.json?v=20261002-7" />
+  <link rel="manifest" href="manifest.json?v=20261002-8" />
   <meta name="theme-color" content="#8A724C" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://unpkg.com" />
 
   <!-- Design System -->
-  <link rel="stylesheet" href="styles.css?v=20261002-7" />
+  <link rel="stylesheet" href="styles.css?v=20261002-8" />
 
   <!-- Lucide Icons — Modern outline icons (rounded, thin stroke) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
@@ -114,32 +114,18 @@
 
         <div class="nav-section-label">Báo cáo & Phân tích</div>
 
-        <!-- Doanh thu Etsy -->
+        <!-- Tài chính tổng -->
         <div class="nav-item"
-             id="nav-doanh-thu-etsy"
-             data-page="doanh-thu-etsy"
+             id="nav-tai-chinh-tong"
+             data-page="tai-chinh-tong"
              role="button"
              tabindex="0"
-             onclick="App.navigateTo('doanh-thu-etsy')">
+             onclick="App.navigateTo('tai-chinh-tong')">
           <span class="nav-icon">
-            <!-- Lucide: trending-up (doanh thu) -->
-            <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+            <!-- Lucide: wallet (ví tiền / tài chính) -->
+            <svg viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
           </span>
-          <span class="nav-label">Doanh thu Etsy</span>
-        </div>
-
-        <!-- Doanh thu Pixel -->
-        <div class="nav-item"
-             id="nav-keo-doanh-thu-pixel"
-             data-page="keo-doanh-thu-pixel"
-             role="button"
-             tabindex="0"
-             onclick="App.navigateTo('keo-doanh-thu-pixel')">
-          <span class="nav-icon">
-            <!-- Lucide: banknote (doanh thu pixel) -->
-            <svg viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
-          </span>
-          <span class="nav-label">Doanh thu Pixel</span>
+          <span class="nav-label">Tài chính tổng</span>
         </div>
 
         <!-- Phân tích tổng -->
@@ -156,18 +142,32 @@
           <span class="nav-label">Phân tích tổng</span>
         </div>
 
-        <!-- Tài chính tổng -->
+        <!-- Doanh thu Pixel -->
         <div class="nav-item"
-             id="nav-tai-chinh-tong"
-             data-page="tai-chinh-tong"
+             id="nav-keo-doanh-thu-pixel"
+             data-page="keo-doanh-thu-pixel"
              role="button"
              tabindex="0"
-             onclick="App.navigateTo('tai-chinh-tong')">
+             onclick="App.navigateTo('keo-doanh-thu-pixel')">
           <span class="nav-icon">
-            <!-- Lucide: wallet (ví tiền / tài chính) -->
-            <svg viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
+            <!-- Lucide: banknote (doanh thu pixel) -->
+            <svg viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
           </span>
-          <span class="nav-label">Tài chính tổng</span>
+          <span class="nav-label">Doanh thu Pixel</span>
+        </div>
+
+        <!-- Doanh thu Etsy -->
+        <div class="nav-item"
+             id="nav-doanh-thu-etsy"
+             data-page="doanh-thu-etsy"
+             role="button"
+             tabindex="0"
+             onclick="App.navigateTo('doanh-thu-etsy')">
+          <span class="nav-icon">
+            <!-- Lucide: trending-up (doanh thu) -->
+            <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+          </span>
+          <span class="nav-label">Doanh thu Etsy</span>
         </div>
 
         <!-- Chi lương & Hiệu suất nhân sự -->
@@ -267,7 +267,7 @@
   ══════════════════════════════════════════════════════════ -->
 
   <!-- 1. Config -->
-  <script src="config.js?v=20261002-7"></script>
+  <script src="config.js?v=20261002-8"></script>
 
   <!-- 2. Chart.js (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -276,7 +276,7 @@
   <script src="https://accounts.google.com/gsi/client" id="gsi-script" async defer></script>
 
   <!-- 3. App Logic -->
-  <script src="app.js?v=20261002-7"></script>
+  <script src="app.js?v=20261002-8"></script>
 
   <!-- Script xử lý Mobile Menu -->
   <script>
