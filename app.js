@@ -5908,16 +5908,16 @@ const App = {
       const laThu     = (r.muc === 'thu'     || r.muc === 'ca_hai');
       const laDoanhSo = (r.muc === 'doanhso' || r.muc === 'ca_hai');
 
-      if (laDoanhSo) {
-        dsGop += tien;
-        if (r.source === 'pixel') dsPixel += tien; else if (r.source === 'etsy') dsEtsy += tien;
+      if (laThu) {
+        tongGop += tien;
+        if (r.source === 'pixel') tongPixel += tien;
+        else if (r.source === 'etsy') tongEtsy += tien;
       }
 
-      if (!laThu) return;   // phan duoi (bieu do, ty trong) dua tren TIEN THUC THU
+      if (!laDoanhSo) return;   // biểu đồ + tỷ trọng dựa trên DOANH SỐ (Pixel theo ngày lên đơn — khớp trang Doanh thu Pixel)
 
-      tongGop += tien;
-      if (r.source === 'pixel') tongPixel += tien;
-      else if (r.source === 'etsy') tongEtsy += tien;
+      dsGop += tien;
+      if (r.source === 'pixel') dsPixel += tien; else if (r.source === 'etsy') dsEtsy += tien;
 
       // Khoá ngày lấy từ parsedDate (dd/mm/yyyy đủ 2 chữ số, bỏ giờ) để cùng một ngày
       // luôn gộp vào một cột, dù chuỗi gốc ghi "1/10/2026" hay "01/10/2026 10:30".
@@ -5987,7 +5987,7 @@ const App = {
           <b>Tiền thực thu</b> = tiền thật sự về trong kỳ.
           Chênh lệch giữa hai hàng chính là phần khách còn nợ, hoặc tiền thu của đơn kỳ trước.
           Riêng Etsy hai con số bằng nhau vì khách trả ngay trên sàn.
-          Biểu đồ và tỷ trọng bên dưới dựa trên <b>tiền thực thu</b>.
+          Biểu đồ và tỷ trọng bên dưới dựa trên <b>doanh số ghi nhận</b> (khớp với trang Doanh thu Pixel).
         </div>
 
         <!-- HANG 2: TIEN THUC THU -->
@@ -6010,7 +6010,7 @@ const App = {
         <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; align-items:stretch;">
           <!-- Biểu đồ đường -->
           <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px; display:flex; flex-direction:column;">
-            <h3 style="margin:0 0 10px 0; font-size:16px; font-weight:600;">Xu hướng Doanh thu theo ngày (Pixel + Etsy)</h3>
+            <h3 style="margin:0 0 10px 0; font-size:16px; font-weight:600;">Xu hướng Doanh số theo ngày (Pixel + Etsy)</h3>
             <div class="dt-doc" id="ptt-doc">
               <div class="dt-doc-tren">
                 <span class="dt-doc-tien" id="ptt-doc-tien">—</span>
@@ -6047,7 +6047,7 @@ const App = {
 
     // Chèn cả ngày không có tiền về (giống app CRM). _chenNgayTrong trả về mới nhất trước.
     const dailyDayDu = this._chenNgayTrong(dailyArr.slice(), startDate, endDate).reverse();
-    setTimeout(() => this._initPhanTichTongCharts(dailyDayDu, tongPixel, tongEtsy), 100);
+    setTimeout(() => this._initPhanTichTongCharts(dailyDayDu, dsPixel, dsEtsy), 100);
   },
 
   /** Phân tích tổng: Chart.js gọi vào đây mỗi lần chạm/rê chuột trên biểu đồ xu hướng. */
@@ -6077,9 +6077,9 @@ const App = {
 
     const phan = [];
     if (r.tien === 0 && !r.pixel && !r.etsy) {
-      phan.push('<span class="dt-doc-chip bang">Không có tiền về trong ngày</span>');
+      phan.push('<span class="dt-doc-chip bang">Không có doanh số trong ngày</span>');
     } else if (r.truoc == null) {
-      phan.push('<span class="dt-doc-phu">ngày đầu tiên có tiền về trong kỳ</span>');
+      phan.push('<span class="dt-doc-phu">ngày đầu tiên có doanh số trong kỳ</span>');
     } else {
       const chenh = r.tien - r.truoc;
       if (chenh === 0) {
