@@ -2932,6 +2932,26 @@ const App = {
     return giaTriGiam;
   },
 
+  // [06/10/2026] Chia doanh số sale — đọc cột chia_doanh_so của DON_HANG (app CRM ghi),
+  // dạng "Lan: 60% | Hoa: 40%". Trống/ghi sai = 100% cho sale_phu_trach (giống CRM).
+  _tiLeSale(don, hoTen) {
+    const t = (hoTen || '').toString().trim().toLowerCase();
+    if (!t) return 0;
+    const chinh = (don?.sale_phu_trach || '').toString().trim();
+    const raw = (don?.chia_doanh_so || '').toString().trim();
+    let ds = [];
+    if (raw) {
+      raw.split('|').forEach(p => {
+        const m = p.trim().match(/^(.+?)\s*:\s*([\d.,]+)\s*%?$/);
+        if (m) ds.push({ ten: m[1].trim(), pt: parseFloat(m[2].replace(',', '.')) });
+      });
+      const tong = ds.reduce((x, y) => x + (y.pt || 0), 0);
+      if (!ds.length || ds.some(x => !(x.pt > 0)) || Math.abs(tong - 100) > 0.01) ds = [];
+    }
+    if (!ds.length) ds = chinh ? [{ ten: chinh, pt: 100 }] : [];
+    return ds.filter(x => x.ten.toLowerCase() === t).reduce((x, y) => x + y.pt / 100, 0);
+  },
+
   _tinhSoPhaiThu(don) {
     if (!don) return 0;
     const tongGiaTri = this._parseCurrency(don.tong_gia_tri);
@@ -7896,11 +7916,11 @@ const App = {
       if (nv.loai === 'sale') {
         return (donHangRows || []).filter(d => {
           if (d.da_an === 'yes') return false;
-          if ((d.sale_phu_trach || '').trim().toLowerCase() !== nv.hoTen.toLowerCase()) return false;
+          if (this._tiLeSale(d, nv.hoTen) <= 0) return false;   // [06/10] có phần trong đơn
           const tt = (d.trang_thai || '').toLowerCase();
           if (tt.includes('hủy') || tt.includes('huy')) return false;
           return hopThang((d.ngay_thu_du || '').trim(), m, y);
-        }).reduce((sum, d) => sum + (tienDonMap[d.ma_don] || 0), 0);
+        }).reduce((sum, d) => sum + (tienDonMap[d.ma_don] || 0) * this._tiLeSale(d, nv.hoTen), 0);
       }
       const diem = (diemDesignerRows || []).filter(d => {
         if ((d.ten_designer || '').trim().toLowerCase() !== nv.hoTen.toLowerCase()) return false;
@@ -8049,13 +8069,13 @@ const App = {
            if (loai === 'sale') {
               const saleOrders = donHangRows.filter(d => {
                  if (d.da_an === 'yes') return false;
-                 if ((d.sale_phu_trach || '').trim().toLowerCase() !== hoTen.toLowerCase()) return false;
+                 if (this._tiLeSale(d, hoTen) <= 0) return false;   // [06/10] có phần trong đơn
                  const tt = (d.trang_thai || '').toLowerCase();
                  if (tt.includes('hủy') || tt.includes('huy')) return false;
                  const ngayThuDu = (d.ngay_thu_du || '').trim();
                  return isTargetMonth(ngayThuDu);
               });
-              giaTriMangLai = saleOrders.reduce((sum, d) => sum + (tienDonMap[d.ma_don] || 0), 0);
+              giaTriMangLai = saleOrders.reduce((sum, d) => sum + (tienDonMap[d.ma_don] || 0) * this._tiLeSale(d, hoTen), 0);
            } else if (loai === 'designer_hieu_suat') {
               const myDiem = diemDesignerRows.filter(d => {
                  if ((d.ten_designer || '').trim().toLowerCase() !== hoTen.toLowerCase()) return false;
