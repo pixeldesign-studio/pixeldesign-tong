@@ -153,6 +153,8 @@ const App = {
       this.renderPhanTichTongPage();
     } else if (page === 'tai-chinh-tong') {
       this.renderTaiChinhTongPage();
+    } else if (page === 'dich-vu-dinh-ky') {
+      this.renderDichVuDinhKyPage();
     } else if (page === 'hieu-suat-nhan-su') {
       this.renderHieuSuatNhanSuPage();
     } else {
@@ -168,6 +170,7 @@ const App = {
       'doanh-thu-etsy':      { title: 'Doanh thu Etsy',       subtitle: 'Báo cáo doanh thu từ Etsy',            icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"22 7 13.5 15.5 8.5 10.5 2 17\"/><polyline points=\"16 7 22 7 22 13\"/></svg>', color: '#8A724C' },
       'keo-doanh-thu-pixel': { title: 'Doanh thu Pixel',  subtitle: 'Số liệu lấy trực tiếp từ app PIXELDESIGN',        icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><path d=\"M6 12h.01M18 12h.01\"/></svg>', color: '#5B8DB8' },
       'phan-tich-tong':      { title: 'Phân tích tổng',       subtitle: 'Biểu đồ và phân tích chuyên sâu',        icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 3v18h18\"/><path d=\"M18 17V9\"/><path d=\"M13 17V5\"/><path d=\"M8 17v-3\"/></svg>', color: '#E74C3C' },
+      'dich-vu-dinh-ky':     { title: 'Dịch vụ định kỳ',      subtitle: 'Phần mềm, ứng dụng trả tiền theo tháng/năm', icon: '', color: '#8A724C' },
       'tai-chinh-tong':      { title: 'Tài chính tổng',       subtitle: 'Quản lý thu chi và tài chính',           icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12V7H5a2 2 0 0 1 0-4h14v4\"/><path d=\"M3 5v14a2 2 0 0 0 2 2h16v-5\"/><path d=\"M18 12a2 2 0 0 0 0 4h4v-4z\"/></svg>', color: '#F39C12' },
       'hieu-suat-nhan-su':   { title: 'Chi lương & Hiệu suất', subtitle: 'Phân tích chi phí lương và hiệu suất', icon: '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg>', color: '#27AE60' },
     };
@@ -6580,6 +6583,7 @@ const App = {
 
       this._renderTaiChinhTongContent('month'); // Mặc định: Tháng này
       this._napQuyAds();                        // Thẻ Quỹ ads — đọc file ADS (chỉ đọc)
+      this._napNhacDichVu();                    // Nhắc dịch vụ định kỳ sắp trừ
     } catch (e) {
       console.error(e);
       content.innerHTML = `<div style="color:var(--clr-error); padding:24px;">Lỗi tải dữ liệu: ${this._escHtml(e.message)}</div>`;
@@ -6682,7 +6686,8 @@ const App = {
     // Không phụ thuộc bộ lọc kỳ. Chuyển giữa 2 TK không làm đổi tổng.
     const sdPixel = this._tinhSoDuTK(this.TK_PIXEL);
     const sdEtsy  = this._tinhSoDuTK(this.TK_ETSY);
-    const soDuThucTe = sdPixel.soDu + sdEtsy.soDu;
+    const sdVisa  = this._tinhSoDuTK(this.TK_VISA);
+    const soDuThucTe = sdPixel.soDu + sdEtsy.soDu + sdVisa.soDu;
     // Giữ tên biến cũ cho phần dưới (theo TK Pixel — TK có ngày chốt sổ chung)
     const soDuDau = sdPixel.soDuDau, coSoDuDau = sdPixel.coChot, ngayChotSoDu = sdPixel.ngayChot;
     const mocSoDu = sdPixel.moc;
@@ -6769,7 +6774,7 @@ const App = {
         <div style="background:${coSoDuDau ? 'linear-gradient(135deg,#3F3428,#5A4A38)' : 'var(--clr-card)'}; color:${coSoDuDau ? '#F5EFE6' : 'var(--clr-text)'}; border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px 24px; display:flex; flex-direction:column; gap:14px;">
           <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
             <div>
-              <div style="font-size:13px; opacity:0.85; font-weight:600; letter-spacing:0.5px;">TỔNG SỐ DƯ HIỆN TẠI (2 TÀI KHOẢN)</div>
+              <div style="font-size:13px; opacity:0.85; font-weight:600; letter-spacing:0.5px;">TỔNG SỐ DƯ HIỆN TẠI (3 TÀI KHOẢN)</div>
               <div style="font-size:28px; font-weight:800; margin-top:4px;">${this._formatVND(soDuThucTe)}</div>
             </div>
             ${coSoDuDau ? '' : `<div style="font-size:12px; max-width:340px; background:rgba(198,40,40,0.08); color:#C62828; border-radius:8px; padding:10px 12px; line-height:1.5;">
@@ -6777,7 +6782,7 @@ const App = {
             </div>`}
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
-            ${[sdPixel, sdEtsy].map(sd => {
+            ${[sdPixel, sdEtsy, sdVisa].map(sd => {
               const nc = sd.ngayChot ? `${String(sd.ngayChot.getDate()).padStart(2,'0')}/${String(sd.ngayChot.getMonth()+1).padStart(2,'0')}/${sd.ngayChot.getFullYear()}` : '';
               const chuyen = (sd.chuyenVao || sd.chuyenRa) ? ` + chuyển vào ${this._formatVND(sd.chuyenVao)} − chuyển đi ${this._formatVND(sd.chuyenRa)}` : '';
               return `<div style="background:rgba(255,255,255,${coSoDuDau ? '0.08' : '0.6'}); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:12px 14px;">
@@ -6791,6 +6796,9 @@ const App = {
             }).join('')}
           </div>
         </div>
+
+        <!-- NHẮC DỊCH VỤ ĐỊNH KỲ SẮP TRỪ (vẽ bởi _veNhacDichVu) -->
+        <div id="tct-dich-vu"></div>
 
         <!-- CHUYỂN VỚI TK CÁ NHÂN BIDV (vẽ bởi _veTheBidv) -->
         <div id="tct-bidv"></div>
@@ -6812,8 +6820,7 @@ const App = {
             <div>
               <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Tài khoản</label>
               <select id="tct-taikhoan" class="form-select" style="width:100%;" onchange="App._tctDoiLoai(true)">
-                <option value="${this.TK_PIXEL}">${this.TK_PIXEL}</option>
-                <option value="${this.TK_ETSY}">${this.TK_ETSY}</option>
+                ${this._dsTK().map(t => `<option value="${this._escHtml(t)}">${this._escHtml(t)}</option>`).join('')}
               </select>
             </div>
             <div>
@@ -6821,7 +6828,7 @@ const App = {
               <select id="tct-loai" class="form-select" style="width:100%;" onchange="App._tctDoiLoai()">
                 <option value="Thu">Thu</option>
                 <option value="Chi">Chi</option>
-                <option value="Chuyển TK">Chuyển giữa 2 TK</option>
+                <option value="Chuyển TK">Chuyển giữa các TK</option>
                 <option value="Số dư đầu">Số dư chốt sổ (số dư cuối ngày)</option>
               </select>
             </div>
@@ -6834,8 +6841,9 @@ const App = {
               <select id="tct-hangmuc" class="form-select" style="width:100%;" onchange="App._tctDoiHangMuc()"></select>
             </div>
             <div id="tct-chuyen-khung" style="display:none;">
-              <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Chuyển</label>
-              <div id="tct-chuyen-mota" style="padding:10px 12px; border-radius:8px; background:rgba(138,114,76,0.08); font-size:13px; font-weight:600;"></div>
+              <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">Chuyển sang TK</label>
+              <select id="tct-tk-nhan" class="form-select" style="width:100%;"></select>
+              <div id="tct-chuyen-mota" style="margin-top:6px; font-size:12px; color:var(--clr-text-muted);"></div>
             </div>
           </div>
           <div style="display:flex; gap:16px; align-items:end; margin-top:16px;">
@@ -6922,6 +6930,465 @@ const App = {
     this._tctDoiLoai();      // nạp danh sách Hạng mục theo Loại đang chọn
     this._veTheQuyAds();     // vẽ lại thẻ Quỹ ads (không đọc lại file)
     this._veTheBidv();
+    this._veNhacDichVu();    // nhắc dịch vụ sắp trừ (không đọc lại file)
+  },
+
+  // ════════════════════════════════════════════════════════════
+  // DỊCH VỤ ĐỊNH KỲ (phần mềm / ứng dụng trả theo tháng/năm)   (06/10/2026)
+  // ────────────────────────────────────────────────────────────
+  // Tab DICH_VU_DINH_KY (file pixeldesign-TAI-CHINH-ADMIN), mỗi dịch vụ 1 dòng.
+  // App tự tạo tab + dòng tiêu đề ở lần lưu đầu tiên.
+  // Nút "Đã trừ": ghi 1 khoản Chi "Phần mềm / công cụ" vào TAI_CHINH_TONG
+  //   (đúng tài khoản bị trừ, số VND thực), ghi chú có mã [DVxxx] để biết
+  //   khoản đó của dịch vụ nào; rồi dời "ngày trừ tiếp theo" sang kỳ sau.
+  // Lịch sử chi của dịch vụ = các dòng sổ quỹ có mã [DVxxx] -> 1 nguồn số liệu.
+  // ════════════════════════════════════════════════════════════
+  TAB_DICH_VU: 'DICH_VU_DINH_KY',
+  DV_COT: ['ma_dv', 'ten_dich_vu', 'muc_dich', 'gia', 'tien_te', 'chu_ky', 'ngay_tru_tiep',
+           'tai_khoan', 'email_dang_ky', 'link_quan_ly', 'trang_thai', 'ghi_chu', 'ngay_tao',
+           'ngay_tru_cuoi', 'so_tien_tru_cuoi'],
+  DV_TRANG_THAI: ['Đang dùng', 'Định hủy', 'Đã hủy'],
+  HM_PHAN_MEM: 'Phần mềm / công cụ',
+
+  _dvDocNgay(s) {
+    const p = String(s || '').trim().replace(/^'/, '').split(' ')[0].split('/');
+    if (p.length !== 3) return null;
+    const d = new Date(+p[2], +p[1] - 1, +p[0]);
+    return isNaN(d.getTime()) ? null : d;
+  },
+  _dvNgayStr(d) {
+    if (!d) return '';
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  },
+  /** Cộng 1 kỳ. Ngày 31 sang tháng ngắn thì lùi về ngày cuối tháng. */
+  _dvCongKy(d, chuKy) {
+    if (!d) return null;
+    const soThang = chuKy === 'Năm' ? 12 : 1;
+    const y = d.getFullYear(), m = d.getMonth() + soThang;
+    const cuoi = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(d.getDate(), cuoi));
+  },
+  _dvSoNgayToi(d) {
+    if (!d) return null;
+    const a = new Date(); a.setHours(0, 0, 0, 0);
+    const b = new Date(d); b.setHours(0, 0, 0, 0);
+    return Math.round((b - a) / 86400000);
+  },
+  _dvGiaHienThi(dv) {
+    const gia = parseFloat(String(dv.gia || '').replace(/,/g, '')) || 0;
+    if ((dv.tien_te || 'USD') === 'VND') return this._formatVND(gia);
+    return `${gia.toLocaleString('en-US', { maximumFractionDigits: 2 })} USD`;
+  },
+  /** Số VND ước tính MỖI THÁNG (null nếu là USD và chưa trừ lần nào). */
+  _dvVndThang(dv) {
+    let vnd = null;
+    if ((dv.tien_te || 'USD') === 'VND') vnd = this._parseCurrency(dv.gia) || 0;
+    else if (this._parseCurrency(dv.so_tien_tru_cuoi) > 0) vnd = this._parseCurrency(dv.so_tien_tru_cuoi);
+    if (vnd === null) return null;
+    return Math.round(dv.chu_ky === 'Năm' ? vnd / 12 : vnd);
+  },
+  _dvUsdThang(dv) {
+    const gia = parseFloat(String(dv.gia || '').replace(/,/g, '')) || 0;
+    return dv.chu_ky === 'Năm' ? gia / 12 : gia;
+  },
+  _dvConTheoDoi(dv) { return (dv.trang_thai || 'Đang dùng') !== 'Đã hủy'; },
+
+  /** Các khoản sổ quỹ của 1 dịch vụ (theo mã trong ghi chú). */
+  _dvKhoanCua(ma, soQuy) {
+    const nhan = `[${ma}]`;
+    return (soQuy || []).filter(r => (r.loai || '').trim() === 'Chi' && String(r.ghi_chu || '').includes(nhan));
+  },
+
+  /** Đọc danh sách dịch vụ. Chưa có tab -> danh sách rỗng. */
+  async _dvTai() {
+    const tabs = await this._layTenCacTab(CONFIG.SPREADSHEET_ID);
+    this._dvCoTab = tabs.includes(this.TAB_DICH_VU);
+    if (!this._dvCoTab) return [];
+    const rows = await this._readSheet(this.session.accessToken, this.TAB_DICH_VU);
+    return rows.map((r, i) => ({ ...r, _dong: i + 2 })).filter(r => (r.ma_dv || '').trim());
+  },
+
+  async renderDichVuDinhKyPage() {
+    const content = document.getElementById('page-content');
+    content.style.padding = '24px';
+    content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:80px 0;flex-direction:column;gap:16px;">
+      <div class="spinner" style="width:32px;height:32px;border-width:3px;border-color:rgba(138,114,76,0.2);border-top-color:var(--clr-accent);"></div>
+      <p style="font-size:var(--font-size-sm);color:var(--clr-text-muted);">Đang tải danh sách dịch vụ...</p></div>`;
+    try {
+      const [ds, soQuy] = await Promise.all([
+        this._dvTai(),
+        this._readSheet(this.session.accessToken, CONFIG.SHEETS.TAI_CHINH_TONG).catch(() => []),
+      ]);
+      this._dvDs = ds;
+      this._dvSoQuy = (soQuy || []).map(r => ({ ...r, so_tien: this._parseCurrency(r.so_tien) || 0, parsedDate: this._dvDocNgay(r.ngay) }));
+      this._veDichVu();
+    } catch (e) {
+      console.error(e);
+      content.innerHTML = `<div style="color:var(--clr-error); padding:24px;">Lỗi tải dữ liệu: ${this._escHtml(e.message)}</div>`;
+    }
+  },
+
+  _veDichVu(loc) {
+    if (loc) this._dvLoc = loc;
+    loc = this._dvLoc || 'theo_doi';
+    const content = document.getElementById('page-content');
+    const ds = this._dvDs || [];
+    const soQuy = this._dvSoQuy || [];
+    const homNay = new Date();
+
+    // ── Số tổng quan ──
+    const dangTheoDoi = ds.filter(dv => this._dvConTheoDoi(dv));
+    let vndThang = 0, usdChuaQuyDoi = 0, soChuaQuyDoi = 0;
+    dangTheoDoi.forEach(dv => {
+      const v = this._dvVndThang(dv);
+      if (v === null) { usdChuaQuyDoi += this._dvUsdThang(dv); soChuaQuyDoi++; } else vndThang += v;
+    });
+    const sapTru = dangTheoDoi.filter(dv => { const n = this._dvSoNgayToi(this._dvDocNgay(dv.ngay_tru_tiep)); return n !== null && n >= 0 && n <= 7; });
+    const quaHan = dangTheoDoi.filter(dv => { const n = this._dvSoNgayToi(this._dvDocNgay(dv.ngay_tru_tiep)); return n !== null && n < 0; });
+    const dauThang = new Date(homNay.getFullYear(), homNay.getMonth(), 1);
+    const daChiThang = soQuy.filter(r => (r.loai || '').trim() === 'Chi' && this._chuanChu(r.hang_muc) === this.HM_PHAN_MEM
+      && r.parsedDate && r.parsedDate >= dauThang && r.parsedDate <= homNay).reduce((t, r) => t + r.so_tien, 0);
+
+    // ── Danh sách ──
+    let hienThi = ds;
+    if (loc === 'theo_doi') hienThi = dangTheoDoi;
+    else if (loc === 'da_huy') hienThi = ds.filter(dv => !this._dvConTheoDoi(dv));
+    hienThi = [...hienThi].sort((a, b) => {
+      const ha = this._dvConTheoDoi(a) ? 0 : 1, hb = this._dvConTheoDoi(b) ? 0 : 1;
+      if (ha !== hb) return ha - hb;
+      const da = this._dvDocNgay(a.ngay_tru_tiep), db = this._dvDocNgay(b.ngay_tru_tiep);
+      return (da ? da.getTime() : 9e15) - (db ? db.getTime() : 9e15);
+    });
+
+    const the = (nhan, so, phu, mau) => `
+      <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:18px 20px; border-top:3px solid ${mau};">
+        <div style="font-size:12px; font-weight:700; letter-spacing:0.4px; color:var(--clr-text-muted); text-transform:uppercase;">${nhan}</div>
+        <div style="font-size:24px; font-weight:800; margin-top:6px; color:#2A2420;">${so}</div>
+        <div style="font-size:12.5px; color:var(--clr-text-muted); margin-top:4px; line-height:1.5;">${phu}</div>
+      </div>`;
+    const nut = (k, nhan) => `<button onclick="App._veDichVu('${k}')" style="padding:6px 14px; border-radius:16px; font-size:13px; cursor:pointer; ${loc === k ? 'border:1px solid var(--clr-accent); background:var(--clr-accent); color:#fff;' : 'border:1px solid var(--clr-border-light); background:var(--clr-surface); color:var(--clr-text);'}">${nhan}</button>`;
+
+    const theDv = hienThi.map(dv => this._htmlTheDichVu(dv, soQuy)).join('');
+
+    content.innerHTML = `
+      <div style="max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:20px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+          ${the('Chi định kỳ ước tính / tháng', this._formatVND(vndThang),
+               soChuaQuyDoi ? `+ ${usdChuaQuyDoi.toLocaleString('en-US', { maximumFractionDigits: 2 })} USD của ${soChuaQuyDoi} dịch vụ chưa trừ lần nào (chưa biết số VND)` : 'Theo số VND thực bị trừ lần gần nhất; gói năm chia 12', '#8A724C')}
+          ${the('Đang theo dõi', `${dangTheoDoi.length} dịch vụ`,
+               `${dangTheoDoi.filter(d => d.trang_thai === 'Định hủy').length} dịch vụ đang để "Định hủy"`, '#5B8DB8')}
+          ${the('Sắp trừ trong 7 ngày', `${sapTru.length} khoản`,
+               quaHan.length ? `<span style="color:#C62828; font-weight:600;">${quaHan.length} khoản đã tới ngày, chưa bấm "Đã trừ"</span>` : (sapTru.map(d => this._escHtml(d.ten_dich_vu)).join(', ') || 'Không có'), '#F39C12')}
+          ${the('Đã chi phần mềm tháng này', this._formatVND(daChiThang), 'Tổng khoản Chi "Phần mềm / công cụ" trong sổ quỹ, mọi tài khoản', '#27AE60')}
+        </div>
+
+        <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:16px 20px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            ${nut('theo_doi', 'Đang theo dõi')}${nut('da_huy', 'Đã hủy')}${nut('tat_ca', 'Tất cả')}
+          </div>
+          <button class="btn btn-primary" onclick="App._moFormDichVu()">+ Thêm dịch vụ</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${theDv || `<div style="background:var(--clr-card); border-radius:var(--radius-lg); padding:40px 20px; text-align:center; color:var(--clr-text-muted);">
+            ${ds.length ? 'Không có dịch vụ nào trong mục này.' : 'Chưa có dịch vụ nào. Bấm <b>+ Thêm dịch vụ</b> để khai báo dịch vụ đầu tiên.'}</div>`}
+        </div>
+      </div>`;
+  },
+
+  _htmlTheDichVu(dv, soQuy) {
+    const ma = this._escHtml(dv.ma_dv);
+    const ngay = this._dvDocNgay(dv.ngay_tru_tiep);
+    const n = this._dvSoNgayToi(ngay);
+    const conTheoDoi = this._dvConTheoDoi(dv);
+    let chip = '';
+    if (!conTheoDoi) chip = ['Đã hủy', '#EEE', '#777'];
+    else if (n === null) chip = ['Chưa có ngày trừ', '#FFF4E5', '#B26A00'];
+    else if (n < 0) chip = [`Đã tới ngày ${this._dvNgayStr(ngay)} — chưa ghi "Đã trừ"`, '#FDECEA', '#C62828'];
+    else if (n === 0) chip = ['Trừ hôm nay', '#FFF4E5', '#B26A00'];
+    else if (n <= 7) chip = [`Còn ${n} ngày`, '#FFF4E5', '#B26A00'];
+    const chipHtml = chip ? `<span style="display:inline-block; padding:3px 9px; border-radius:10px; font-size:11.5px; font-weight:700; background:${chip[1]}; color:${chip[2]};">${this._escHtml(chip[0])}</span>` : '';
+    const ttHtml = dv.trang_thai === 'Định hủy'
+      ? `<span style="display:inline-block; padding:3px 9px; border-radius:10px; font-size:11.5px; font-weight:700; background:#F3EFFB; color:#6B5B95;">Định hủy</span>` : '';
+    const khoan = this._dvKhoanCua(dv.ma_dv, soQuy);
+    const daChi = khoan.reduce((t, r) => t + r.so_tien, 0);
+    const link = (dv.link_quan_ly || '').trim();
+    const linkAnToan = /^https?:\/\//i.test(link) ? link : (link ? 'https://' + link : '');
+    const mo = conTheoDoi ? '' : 'opacity:0.6;';
+    const dong = (nhan, gt) => `<div style="min-width:150px;"><div style="font-size:11.5px; color:var(--clr-text-muted);">${nhan}</div><div style="font-size:13.5px; font-weight:600; margin-top:2px;">${gt}</div></div>`;
+    return `
+      <div style="background:var(--clr-card); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:16px 20px; ${mo}">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px 16px; align-items:flex-start;">
+          <div style="min-width:0;">
+            <div style="font-size:16px; font-weight:800; color:#2A2420;">${this._escHtml(dv.ten_dich_vu)} ${ttHtml} ${chipHtml}</div>
+            <div style="font-size:13px; color:var(--clr-text-muted); margin-top:3px;">${this._escHtml([dv.muc_dich, dv.email_dang_ky].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:16px; font-weight:800;">${this._escHtml(this._dvGiaHienThi(dv))}</div>
+            <div style="font-size:12px; color:var(--clr-text-muted);">mỗi ${dv.chu_ky === 'Năm' ? 'năm' : 'tháng'}</div>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:12px 24px; margin-top:12px;">
+          ${dong('Ngày trừ tiếp theo', ngay ? this._dvNgayStr(ngay) : '—')}
+          ${dong('Trừ từ tài khoản', this._escHtml(dv.tai_khoan || this.TK_VISA))}
+          ${dong('Lần trừ gần nhất', dv.ngay_tru_cuoi ? `${this._escHtml(dv.ngay_tru_cuoi)} · ${this._formatVND(this._parseCurrency(dv.so_tien_tru_cuoi))}` : 'Chưa có')}
+          ${dong('Đã chi (sổ quỹ)', `${this._formatVND(daChi)} · ${khoan.length} lần`)}
+        </div>
+        ${dv.ghi_chu ? `<div style="font-size:12.5px; color:#5C544D; margin-top:10px;">${this._escHtml(dv.ghi_chu)}</div>` : ''}
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+          ${conTheoDoi ? `<button class="btn btn-primary btn-sm" onclick="App._moFormDaTru('${ma}')">Đã trừ</button>` : ''}
+          <button class="btn btn-outline btn-sm" onclick="App._moFormDichVu('${ma}')">Sửa</button>
+          ${linkAnToan ? `<a class="btn btn-ghost btn-sm" href="${this._escHtml(linkAnToan)}" target="_blank" rel="noopener" style="text-decoration:none;">Trang quản lý / hủy ↗</a>` : ''}
+        </div>
+      </div>`;
+  },
+
+  _dvHop(id, tieuDe, than, nutLuu, hamLuu) {
+    document.getElementById(id)?.remove();
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="${id}" style="position:fixed; inset:0; z-index:9999; background:rgba(42,36,32,0.4); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:16px;">
+        <div style="background:#FDFBF7; width:100%; max-width:560px; max-height:92vh; overflow:auto; border-radius:18px; box-shadow:0 20px 48px rgba(0,0,0,0.2); padding:22px 22px 18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <h3 style="margin:0; font-size:18px; font-weight:800;">${tieuDe}</h3>
+            <button onclick="document.getElementById('${id}').remove()" style="border:none; background:rgba(138,114,76,0.1); width:30px; height:30px; border-radius:50%; cursor:pointer; color:#8A724C;">✕</button>
+          </div>
+          ${than}
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+            <button class="btn btn-ghost" onclick="document.getElementById('${id}').remove()">Hủy</button>
+            <button class="btn btn-primary" id="${id}-luu" onclick="${hamLuu}">${nutLuu}</button>
+          </div>
+        </div>
+      </div>`);
+  },
+
+  _dvO(nhan, html, rong = false) {
+    return `<div style="${rong ? 'grid-column:1 / -1;' : ''}"><label style="display:block; font-size:13px; font-weight:600; margin-bottom:5px;">${nhan}</label>${html}</div>`;
+  },
+
+  _moFormDichVu(ma) {
+    const dv = ma ? (this._dvDs || []).find(d => d.ma_dv === ma) : null;
+    const v = (k, mac = '') => this._escHtml(dv ? (dv[k] || '') : mac);
+    const ngay = dv ? this._dvDocNgay(dv.ngay_tru_tiep) : null;
+    const chon = (id, ds, gt) => `<select id="${id}" class="form-select" style="width:100%;">${ds.map(x => `<option value="${this._escHtml(x)}"${x === gt ? ' selected' : ''}>${this._escHtml(x)}</option>`).join('')}</select>`;
+    const o = 'class="form-input" style="width:100%;"';
+    const than = `
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+        ${this._dvO('Tên dịch vụ *', `<input id="dv-ten" ${o} value="${v('ten_dich_vu')}" placeholder="VD: Canva Pro">`, true)}
+        ${this._dvO('Dùng để làm gì', `<input id="dv-mucdich" ${o} value="${v('muc_dich')}" placeholder="VD: Thiết kế mockup">`, true)}
+        ${this._dvO('Giá trên web *', `<input id="dv-gia" ${o} inputmode="decimal" value="${v('gia')}" placeholder="VD: 12.99">`)}
+        ${this._dvO('Tiền tệ', chon('dv-tiente', ['USD', 'VND'], dv ? (dv.tien_te || 'USD') : 'USD'))}
+        ${this._dvO('Chu kỳ', chon('dv-chuky', ['Tháng', 'Năm'], dv ? (dv.chu_ky || 'Tháng') : 'Tháng'))}
+        ${this._dvO('Ngày trừ tiếp theo *', `<input id="dv-ngay" type="date" ${o} value="${ngay ? this._formatDateInput(ngay) : ''}">`)}
+        ${this._dvO('Trừ từ tài khoản', chon('dv-tk', this._dsTK(), dv ? (dv.tai_khoan || this.TK_VISA) : this.TK_VISA), true)}
+        ${this._dvO('Email đăng ký dịch vụ', `<input id="dv-email" ${o} value="${v('email_dang_ky')}" placeholder="VD: admin@pixeldesign.vn">`, true)}
+        ${this._dvO('Link trang quản lý / hủy gói', `<input id="dv-link" ${o} value="${v('link_quan_ly')}" placeholder="VD: https://www.canva.com/settings/billing">`, true)}
+        ${this._dvO('Trạng thái', chon('dv-tt', this.DV_TRANG_THAI, dv ? (dv.trang_thai || 'Đang dùng') : 'Đang dùng'))}
+        ${this._dvO('Ghi chú', `<input id="dv-ghichu" ${o} value="${v('ghi_chu')}">`)}
+      </div>
+      <div style="font-size:12px; color:var(--clr-text-muted); margin-top:10px; line-height:1.5;">Giá trên web chỉ để đối chiếu. Số tiền ghi sổ quỹ là số VND thực bị trừ — nhập khi bấm "Đã trừ".</div>`;
+    this._dvHop('dv-hop-form', dv ? 'Sửa dịch vụ' : 'Thêm dịch vụ định kỳ', than, 'Lưu', `App._luuDichVu(${dv ? `'${this._escHtml(dv.ma_dv)}'` : ''})`);
+  },
+
+  /** Bảo đảm có tab DICH_VU_DINH_KY + dòng tiêu đề. Trả về mảng tiêu đề. */
+  async _dvBaoDamTab() {
+    const id = CONFIG.SPREADSHEET_ID;
+    if (!this._dvCoTab) {
+      const tabs = await this._layTenCacTab(id);
+      if (!tabs.includes(this.TAB_DICH_VU)) {
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}:batchUpdate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.session?.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests: [{ addSheet: { properties: { title: this.TAB_DICH_VU } } }] }),
+        });
+        if (!res.ok) {
+          let d = `HTTP ${res.status}`; try { d = (await res.json()).error?.message || d; } catch (_) {}
+          throw new Error(`Không tạo được tab ${this.TAB_DICH_VU}: ${d}`);
+        }
+        await this._writeSheet(this.TAB_DICH_VU, 'A1', [this.DV_COT]);
+      }
+      this._dvCoTab = true;
+    }
+    const [vung] = await this._docSoThat(id, [`${this._tenTabA1(this.TAB_DICH_VU)}!1:1`]);
+    let tieuDe = ((vung && vung[0]) || []).map(h => this._chuanChu(h));
+    if (!tieuDe.length) { await this._writeSheet(this.TAB_DICH_VU, 'A1', [this.DV_COT]); tieuDe = [...this.DV_COT]; }
+    // Thiếu cột nào thì thêm tiêu đề vào cuối dòng 1
+    const thieu = this.DV_COT.filter(c => !tieuDe.includes(c));
+    if (thieu.length) {
+      await this._writeSheet(this.TAB_DICH_VU, `${this._colIndexToLetter(tieuDe.length)}1`, [thieu]);
+      tieuDe = tieuDe.concat(thieu);
+    }
+    return tieuDe;
+  },
+
+  /** Ghi các ô của 1 dịch vụ theo TÊN CỘT. */
+  async _dvGhiDong(dong, patch, tieuDe) {
+    const viec = Object.entries(patch).map(([k, gt]) => {
+      const i = tieuDe.indexOf(k);
+      if (i === -1) return null;
+      return this._writeSheet(this.TAB_DICH_VU, `${this._colIndexToLetter(i)}${dong}`, [[gt]]);
+    }).filter(Boolean);
+    await Promise.all(viec);
+  },
+
+  async _luuDichVu(ma) {
+    const g = (id) => (document.getElementById(id)?.value || '').trim();
+    const ten = g('dv-ten'), giaRaw = g('dv-gia').replace(/,/g, '.'), ngayIn = g('dv-ngay'), tt = g('dv-tt');
+    const gia = parseFloat(giaRaw);
+    if (!ten) { this._showToast('Nhập tên dịch vụ.', 'error'); return; }
+    if (!(gia > 0)) { this._showToast('Giá phải là số lớn hơn 0.', 'error'); return; }
+    if (!ngayIn && tt !== 'Đã hủy') { this._showToast('Nhập ngày trừ tiếp theo.', 'error'); return; }
+    const [y, m, d] = ngayIn ? ngayIn.split('-') : [];
+    const duLieu = {
+      ten_dich_vu: ten, muc_dich: g('dv-mucdich'), gia: String(gia), tien_te: g('dv-tiente') || 'USD',
+      chu_ky: g('dv-chuky') || 'Tháng', ngay_tru_tiep: ngayIn ? `${d}/${m}/${y}` : '',
+      tai_khoan: g('dv-tk') || this.TK_VISA, email_dang_ky: g('dv-email'), link_quan_ly: g('dv-link'),
+      trang_thai: tt || 'Đang dùng', ghi_chu: g('dv-ghichu'),
+    };
+    const nut = document.getElementById('dv-hop-form-luu');
+    if (nut) { nut.disabled = true; nut.textContent = 'Đang lưu...'; }
+    try {
+      const tieuDe = await this._dvBaoDamTab();
+      if (ma) {
+        const dv = (this._dvDs || []).find(x => x.ma_dv === ma);
+        if (!dv) throw new Error('Không tìm thấy dịch vụ ' + ma);
+        // Đọc lại cột mã để chắc chắn đúng dòng (phòng ai đó sửa tay trên Sheet)
+        const [cotMa] = await this._docSoThat(CONFIG.SPREADSHEET_ID, [`${this._tenTabA1(this.TAB_DICH_VU)}!${this._colIndexToLetter(tieuDe.indexOf('ma_dv'))}:${this._colIndexToLetter(tieuDe.indexOf('ma_dv'))}`]);
+        const idx = (cotMa || []).findIndex(r => String(r[0] || '').trim() === ma);
+        if (idx < 1) throw new Error('Không tìm thấy dòng của dịch vụ ' + ma + ' trên Sheet.');
+        await this._dvGhiDong(idx + 1, duLieu, tieuDe);
+      } else {
+        const moi = { ...duLieu, ma_dv: 'DV' + Date.now().toString(36).toUpperCase(), ngay_tao: this._dvNgayStr(new Date()) };
+        await this._appendSheet(this.TAB_DICH_VU, [tieuDe.map(t => moi[t] !== undefined ? moi[t] : '')]);
+      }
+      document.getElementById('dv-hop-form')?.remove();
+      this._showToast(ma ? 'Đã lưu thay đổi.' : 'Đã thêm dịch vụ.', 'success');
+      this.renderDichVuDinhKyPage();
+    } catch (e) {
+      console.error(e);
+      this._showToast('Lỗi lưu: ' + e.message, 'error', 6000);
+      if (nut) { nut.disabled = false; nut.textContent = 'Lưu'; }
+    }
+  },
+
+  _moFormDaTru(ma) {
+    const dv = (this._dvDs || []).find(d => d.ma_dv === ma);
+    if (!dv) return;
+    const homNay = new Date(); homNay.setHours(0, 0, 0, 0);
+    const ngayKy = this._dvDocNgay(dv.ngay_tru_tiep);
+    const ngayMacDinh = ngayKy && ngayKy <= homNay ? ngayKy : homNay;
+    const kySau = this._dvCongKy(ngayKy || ngayMacDinh, dv.chu_ky);
+    const o = 'class="form-input" style="width:100%;"';
+    const than = `
+      <div style="font-size:13.5px; color:#5C544D; margin-bottom:12px;"><b>${this._escHtml(dv.ten_dich_vu)}</b> · giá trên web ${this._escHtml(this._dvGiaHienThi(dv))} / ${dv.chu_ky === 'Năm' ? 'năm' : 'tháng'}</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+        ${this._dvO('Ngày bị trừ *', `<input id="dt-ngay" type="date" ${o} value="${this._formatDateInput(ngayMacDinh)}">`)}
+        ${this._dvO('Số tiền VND thực bị trừ *', `<input id="dt-sotien" ${o} inputmode="numeric" placeholder="Xem tin nhắn / sao kê ngân hàng"
+            oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',')">`)}
+        ${this._dvO('Bị trừ từ tài khoản', `<select id="dt-tk" class="form-select" style="width:100%;">${this._dsTK().map(t => `<option value="${this._escHtml(t)}"${t === (dv.tai_khoan || this.TK_VISA) ? ' selected' : ''}>${this._escHtml(t)}</option>`).join('')}</select>`, true)}
+      </div>
+      <label style="display:flex; gap:8px; align-items:center; margin-top:14px; font-size:13.5px; cursor:pointer;">
+        <input type="checkbox" id="dt-doi" ${dv.trang_thai === 'Định hủy' ? '' : 'checked'}> Dời ngày trừ tiếp theo sang <b>${this._dvNgayStr(kySau)}</b>
+      </label>
+      <div style="font-size:12px; color:var(--clr-text-muted); margin-top:10px; line-height:1.5;">
+        App sẽ ghi 1 khoản <b>Chi · Phần mềm / công cụ</b> vào sổ quỹ của tài khoản đã chọn, ghi chú "${this._escHtml(dv.ten_dich_vu)} [${this._escHtml(dv.ma_dv)}]".
+        ${dv.trang_thai === 'Định hủy' ? '<br><span style="color:#6B5B95;">Dịch vụ đang để "Định hủy": nhớ vào trang quản lý hủy gói trước kỳ sau.</span>' : ''}
+      </div>`;
+    this._dvHop('dv-hop-datru', 'Ghi khoản đã bị trừ', than, 'Ghi vào sổ quỹ', `App._luuDaTru('${this._escHtml(ma)}')`);
+  },
+
+  /** Ghi 1 dòng vào TAI_CHINH_TONG theo TÊN CỘT (giống form Sổ quỹ). */
+  async _ghiDongSoQuy(giaTri) {
+    const tab = CONFIG.SHEETS.TAI_CHINH_TONG;
+    const [vung] = await this._docSoThat(this._getSpreadsheetIdFor(tab), [`${this._tenTabA1(tab)}!1:1`]);
+    const tieuDe = ((vung && vung[0]) || []).map(h => this._chuanChu(h));
+    const thieu = ['ngay', 'loai', 'so_tien', 'hang_muc', 'ghi_chu'].filter(k => !tieuDe.includes(k));
+    if (thieu.length) throw new Error(`Tab ${tab} thiếu cột ${thieu.join(', ')} ở dòng 1 — chưa lưu gì.`);
+    if (!tieuDe.includes('tai_khoan')) {
+      await this._writeSheet(tab, `${this._colIndexToLetter(tieuDe.length)}1`, [['tai_khoan']]);
+      tieuDe.push('tai_khoan');
+    }
+    await this._appendSheet(tab, [tieuDe.map(t => (giaTri[t] !== undefined ? giaTri[t] : ''))]);
+  },
+
+  async _luuDaTru(ma) {
+    const dv = (this._dvDs || []).find(d => d.ma_dv === ma);
+    if (!dv) return;
+    const ngayIn = document.getElementById('dt-ngay')?.value || '';
+    const soTien = parseInt((document.getElementById('dt-sotien')?.value || '').replace(/[^0-9]/g, ''), 10);
+    const tk = document.getElementById('dt-tk')?.value || this.TK_VISA;
+    const doi = !!document.getElementById('dt-doi')?.checked;
+    if (!ngayIn) { this._showToast('Chọn ngày bị trừ.', 'error'); return; }
+    if (!(soTien > 0)) { this._showToast('Nhập số tiền VND thực bị trừ.', 'error'); return; }
+    const [y, m, d] = ngayIn.split('-');
+    const ngay = `${d}/${m}/${y}`;
+
+    // Chặn ghi trùng: cùng dịch vụ, cùng ngày, cùng số tiền
+    const trung = this._dvKhoanCua(ma, this._dvSoQuy).some(r => this._chuanChu(r.ngay).replace(/^'/, '') === ngay && r.so_tien === soTien);
+    if (trung) {
+      const tiep = await this._showConfirm(`Sổ quỹ đã có khoản ${this._formatVND(soTien)} ngày ${ngay} của ${dv.ten_dich_vu}.\nVẫn ghi thêm?`, 'Vẫn ghi', 'Không ghi');
+      if (!tiep) return;
+    }
+
+    const nut = document.getElementById('dv-hop-datru-luu');
+    if (nut) { nut.disabled = true; nut.textContent = 'Đang ghi...'; }
+    try {
+      await this._ghiDongSoQuy({
+        ngay, loai: 'Chi', so_tien: soTien, hang_muc: this.HM_PHAN_MEM,
+        ghi_chu: `${dv.ten_dich_vu} · ${this._dvGiaHienThi(dv)} [${dv.ma_dv}]`, tai_khoan: tk,
+      });
+    } catch (e) {
+      console.error(e);
+      this._showToast('Chưa ghi được sổ quỹ: ' + e.message, 'error', 6000);
+      if (nut) { nut.disabled = false; nut.textContent = 'Ghi vào sổ quỹ'; }
+      return;
+    }
+    // Sổ quỹ đã ghi xong. Bước sau lỗi thì KHÔNG ghi lại sổ quỹ, chỉ báo để sửa tay ngày trừ.
+    try {
+      const tieuDe = await this._dvBaoDamTab();
+      const cot = this._colIndexToLetter(tieuDe.indexOf('ma_dv'));
+      const [cotMa] = await this._docSoThat(CONFIG.SPREADSHEET_ID, [`${this._tenTabA1(this.TAB_DICH_VU)}!${cot}:${cot}`]);
+      const idx = (cotMa || []).findIndex(r => String(r[0] || '').trim() === ma);
+      if (idx < 1) throw new Error('không thấy dòng dịch vụ');
+      const patch = { ngay_tru_cuoi: ngay, so_tien_tru_cuoi: soTien };
+      if (doi) patch.ngay_tru_tiep = this._dvNgayStr(this._dvCongKy(this._dvDocNgay(dv.ngay_tru_tiep) || this._dvDocNgay(ngay), dv.chu_ky));
+      await this._dvGhiDong(idx + 1, patch, tieuDe);
+      this._showToast('Đã ghi vào sổ quỹ.', 'success');
+    } catch (e) {
+      console.error(e);
+      this._showToast('Đã ghi sổ quỹ, nhưng chưa cập nhật được ngày trừ của dịch vụ (' + e.message + '). Bấm "Sửa" để chỉnh ngày, ĐỪNG bấm "Đã trừ" lại.', 'error', 9000);
+    }
+    document.getElementById('dv-hop-datru')?.remove();
+    this.renderDichVuDinhKyPage();
+  },
+
+  /** Nhắc trên trang Tài chính tổng: khoản sắp trừ / đã tới ngày. Lỗi thì im lặng. */
+  async _napNhacDichVu() {
+    try {
+      this._dvNhac = await this._dvTai();
+    } catch (e) {
+      console.warn('[DichVu] Không đọc được danh sách dịch vụ:', e.message);
+      this._dvNhac = [];
+    }
+    this._veNhacDichVu();
+  },
+  _veNhacDichVu() {
+    const o = document.getElementById('tct-dich-vu');
+    if (!o) return;
+    const ds = (this._dvNhac || []).filter(dv => this._dvConTheoDoi(dv));
+    const lay = (dv) => this._dvSoNgayToi(this._dvDocNgay(dv.ngay_tru_tiep));
+    const quaHan = ds.filter(dv => { const n = lay(dv); return n !== null && n < 0; });
+    const sap = ds.filter(dv => { const n = lay(dv); return n !== null && n >= 0 && n <= 7; });
+    if (!quaHan.length && !sap.length) { o.innerHTML = ''; return; }
+    const ten = (arr) => arr.map(dv => `${this._escHtml(dv.ten_dich_vu)} (${this._escHtml(this._dvNgayStr(this._dvDocNgay(dv.ngay_tru_tiep)))})`).join(', ');
+    o.innerHTML = `
+      <div style="background:#FFF8EE; border:1px solid #F3D9B1; border-radius:var(--radius-lg); padding:14px 18px; display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; justify-content:space-between;">
+        <div style="font-size:13.5px; line-height:1.6; color:#5C4A32;">
+          <b>Dịch vụ định kỳ</b>
+          ${quaHan.length ? `<div style="color:#C62828;">Đã tới ngày trừ, chưa ghi: ${ten(quaHan)}</div>` : ''}
+          ${sap.length ? `<div>Sắp trừ trong 7 ngày: ${ten(sap)}</div>` : ''}
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="App.navigateTo('dich-vu-dinh-ky')">Mở Dịch vụ định kỳ</button>
+      </div>`;
   },
 
   async _saveTaiChinhTongRecord() {
@@ -6942,6 +7409,11 @@ const App = {
       return;
     }
     const taiKhoan = document.getElementById('tct-taikhoan')?.value || this.TK_PIXEL;
+    const tkNhan = document.getElementById('tct-tk-nhan')?.value || this._tkKia(taiKhoan);
+    if (loai === 'Chuyển TK' && (tkNhan === taiKhoan || !this._dsTK().includes(tkNhan))) {
+      this._showToast('Chọn TK nhận khác TK chuyển đi.', 'error');
+      return;
+    }
     if (dsHM) {
       if (!hangMuc) { this._showToast('Vui lòng chọn Hạng mục.', 'error'); return; }
       if (!dsHM.includes(hangMuc)) { this._showToast('Hạng mục không nằm trong danh sách.', 'error'); return; }
@@ -6974,7 +7446,7 @@ const App = {
       const [vung] = await this._docSoThat(this._getSpreadsheetIdFor(tab), [`${this._tenTabA1(tab)}!1:1`]);
       const tieuDe = ((vung && vung[0]) || []).map(h => this._chuanChu(h));
       const giaTri = { ngay, loai, so_tien: soTien,
-                       hang_muc: loai === 'Chuyển TK' ? this._tkKia(taiKhoan) : hangMuc,   // Chuyển TK: hạng mục = TK nhận
+                       hang_muc: loai === 'Chuyển TK' ? tkNhan : hangMuc,   // Chuyển TK: hạng mục = TK nhận
                        ghi_chu: ghiChu };
       const thieu = Object.keys(giaTri).filter(k => !tieuDe.includes(k));
       // Cột tai_khoan: Sheet cũ chưa có thì thêm tiêu đề vào ô trống kế tiếp ở dòng 1
@@ -7011,10 +7483,21 @@ const App = {
   // ==========================================
   TK_PIXEL: 'TK Pixel',
   TK_ETSY:  'TK Etsy (0838)',
+  // [06/10/2026] TK thứ 3: thẻ Visa đứng tên Kim Hân, chỉ dùng trả phần mềm/ứng dụng.
+  //   Tiền vào = TK Pixel chuyển sang (Loại "Chuyển TK"). Số dư bắt đầu 0.
+  TK_VISA:  'TK Visa Kim Hân (2037)',
+  _dsTK() { return [this.TK_PIXEL, this.TK_ETSY, this.TK_VISA]; },
   _tkCua(r) {
-    return this._chuanChu(r && r.tai_khoan) === this.TK_ETSY ? this.TK_ETSY : this.TK_PIXEL;
+    const t = this._chuanChu(r && r.tai_khoan);
+    return this._dsTK().includes(t) ? t : this.TK_PIXEL;
   },
-  _tkKia(tk) { return tk === this.TK_ETSY ? this.TK_PIXEL : this.TK_ETSY; },
+  /** TK nhận gợi ý mặc định khi chuyển: từ TK Pixel -> TK Visa, còn lại -> TK Pixel. */
+  _tkKia(tk) { return tk === this.TK_PIXEL ? this.TK_VISA : this.TK_PIXEL; },
+  /** TK nhận của một khoản "Chuyển TK" (ghi ở hang_muc). */
+  _tkNhanCua(r) {
+    const h = this._chuanChu(r && r.hang_muc);
+    return this._dsTK().includes(h) ? h : this.TK_PIXEL;
+  },
 
   /** Số dư thực tế của MỘT tài khoản (không phụ thuộc bộ lọc kỳ). */
   _tinhSoDuTK(tk) {
@@ -7033,7 +7516,7 @@ const App = {
       const l = (r.loai || '').trim();
       if (l === 'Số dư đầu' || !trong(r.parsedDate)) return;
       if (l === 'Chuyển TK') {
-        const den = this._chuanChu(r.hang_muc) === this.TK_ETSY ? this.TK_ETSY : this.TK_PIXEL;
+        const den = this._tkNhanCua(r);
         if (this._tkCua(r) === tk) chuyenRa += r.so_tien;
         if (den === tk) chuyenVao += r.so_tien;
         return;
@@ -7099,8 +7582,16 @@ const App = {
     const tk = document.getElementById('tct-taikhoan')?.value || this.TK_PIXEL;
     if (kChuyen) {
       kChuyen.style.display = loai === 'Chuyển TK' ? '' : 'none';
+      // Chọn TK nhận: mọi TK trừ TK đang chuyển đi
+      const oNhan = document.getElementById('tct-tk-nhan');
+      if (oNhan) {
+        const cu = oNhan.value;
+        const ds = this._dsTK().filter(t => t !== tk);
+        oNhan.innerHTML = ds.map(t => `<option value="${this._escHtml(t)}">${this._escHtml(t)}</option>`).join('');
+        oNhan.value = ds.includes(cu) ? cu : this._tkKia(tk);
+      }
       const mt = document.getElementById('tct-chuyen-mota');
-      if (mt) mt.textContent = `Từ ${tk}  →  Sang ${this._tkKia(tk)}`;
+      if (mt) mt.textContent = `Tiền đi từ ${tk}. Không tính vào thu/chi.`;
     }
     if (chiDoiTaiKhoan && this.TCT_HANG_MUC[loai]) return;   // giữ nguyên hạng mục đang chọn
     const ds = this.TCT_HANG_MUC[loai];
@@ -7121,6 +7612,8 @@ const App = {
     // Khoản Etsy thường đi qua TK Etsy (0838) -> gợi ý sẵn, ông vẫn đổi được
     const oTk = document.getElementById('tct-taikhoan');
     if (oTk && /^Etsy –/.test(hm)) { oTk.value = this.TK_ETSY; }
+    // Phần mềm thường trả bằng thẻ Visa -> gợi ý sẵn, ông vẫn đổi được
+    if (oTk && hm === this.HM_PHAN_MEM) { oTk.value = this.TK_VISA; }
     const nhan = document.getElementById('tct-ghichu-nhan');
     const o    = document.getElementById('tct-ghichu');
     if (!nhan || !o) return;
