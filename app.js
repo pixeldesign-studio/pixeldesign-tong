@@ -1074,11 +1074,13 @@ const App = {
       }));
 
       // Sắp xếp cũ nhất -> mới nhất để tính lũy kế đúng theo thời gian
-      records.sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
+      // Cùng ngày: lần nhập trước (dòng trên Sheet) đứng trước — để tính phát sinh đúng thứ tự nhập
+      records.sort((a, b) => (a.parsedDate.getTime() - b.parsedDate.getTime()) || (a._origIndex - b._origIndex));
 
       this._tinhPhatSinhEtsy(records);   // tính lại từ 0 mỗi tháng, giống màn hình Etsy
       // Đảo lại mới nhất lên đầu
-      records.sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
+      // [12/10/2026] Cùng ngày: lần nhập SAU nằm TRÊN lần nhập trước
+      records.sort((a, b) => (b.parsedDate.getTime() - a.parsedDate.getTime()) || (b._origIndex - a._origIndex));
       
       this._etsyData = records;
     } catch (err) {
