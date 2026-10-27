@@ -6649,6 +6649,7 @@ const App = {
 
     // Popup "Chi tiết Tổng chi" dùng đúng các khoản đã cộng vào thẻ TỔNG CHI
     this._tctChiKy = filteredManualData.filter(r => (r.loai || '').trim() === 'Chi' && !this._laHMBidv(r.hang_muc));
+    this._tctKy = { tu: startDate, den: endDate, loai: filterLoai };
     {
       const f2 = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
       const coDau = startDate.getTime() > 0, coCuoi = endDate.getFullYear() < 2999;
@@ -7564,6 +7565,28 @@ const App = {
     const tong = ds.reduce((t, r) => t + r.so_tien, 0);
     const tongCP = cp.reduce((t, n) => t + n.tong, 0);
     const tongKCP = tong - tongCP;
+    const ky = this._tctKy || {};
+    const ads = (ky.loai === 'Thu' || !ky.tu) ? null : this._adsNvTrongKy(ky.tu, ky.den);
+    const soAds = ads && !ads.dangTai && !ads.loi ? ads.tong : 0;
+    const tongCPKD = tongCP + soAds;
+    const veAds = () => {
+      if (!ads) return '';
+      const khung = (than) => `<div style="border:1px solid rgba(138,114,76,0.14); border-radius:12px; padding:10px 14px; background:#FFFDF8;">${than}</div>`;
+      if (ads.dangTai) return khung(`<div style="font-weight:700; color:#2A2420;">Quảng cáo – TK nhân viên</div><div style="font-size:12px; color:#8A724C;">Đang tải số ads… đóng popup mở lại sau vài giây.</div>`);
+      if (ads.loi) return khung(`<div style="font-weight:700; color:#2A2420;">Quảng cáo – TK nhân viên</div><div style="font-size:12px; color:#C62828;">Chưa tính được: ${esc(ads.loi)}</div>`);
+      const dong = ads.chiTiet.map(c => `<div style="display:flex; justify-content:space-between; gap:8px; font-size:12.5px; color:#4A4036; padding:3px 0;"><span>Tháng ${esc(this._thangChu(c.khoa))} · ${c.cach === 'thuc' ? 'số thực trả (SỐ NHẬP THÁNG)' : `ước tính: ADS NGÀY × ${String(ads.heSo).replace('.', ',')}`}</span><b>${this._formatVND(c.so)}</b></div>`).join('')
+        || `<div style="font-size:12.5px; color:#8A724C;">Kỳ này chưa có số chi tiêu nào.</div>`;
+      return khung(`
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:700; color:#2A2420;">Quảng cáo – TK nhân viên (sale tiêu thật)</div>
+            <div style="font-size:12px; color:#8A724C;">Lấy từ file PXDE - CHIẾN DỊCH ADS, không phải dòng sổ quỹ</div>
+          </div>
+          <div style="font-weight:800; color:#2A2420; white-space:nowrap;">${this._formatVND(soAds)}</div>
+        </div>
+        <div style="margin:6px 0 0 0;">${dong}</div>
+        ${ads.chuaPL ? `<div style="font-size:12px; color:#C62828; margin-top:4px;">${ads.chuaPL} dòng ADS NGÀY có mã bài chưa khai TK ở DANH MỤC — chưa tính.</div>` : ''}`);
+    };
     const giaiThich = {
       'Quảng cáo – ứng sale': 'Tiền ứng cho sale chạy ads, chưa phải chi phí. Số sale tiêu thật xem thẻ Quỹ ads.',
       'Điều chỉnh – không tính chi phí': 'Khoản cân đối sổ (tiền đơn VAT về TK công ty TNHH, hoàn cọc…), không phải chi phí.',
@@ -7593,9 +7616,9 @@ const App = {
         </div>`;
     };
     const tieuDeNhom = (chu, so) => `<div style="display:flex; justify-content:space-between; align-items:baseline; margin:6px 2px 2px; font-size:12px; font-weight:700; letter-spacing:.4px; color:#8A724C; text-transform:uppercase;"><span>${chu}</span><span>${this._formatVND(so)}</span></div>`;
-    const than = ds.length === 0
+    const than = (ds.length === 0 && !soAds)
       ? `<div style="text-align:center; padding:40px 12px; color:#8A724C; font-style:italic;">Kỳ này không có khoản chi nào.</div>`
-      : tieuDeNhom('Chi phí kinh doanh', tongCP) + cp.map(n => veNhom(n, '#2A2420')).join('')
+      : tieuDeNhom('Chi phí kinh doanh', tongCPKD) + cp.map(n => veNhom(n, '#2A2420')).join('') + veAds()
         + (kcp.length ? tieuDeNhom('Không phải chi phí', tongKCP) + kcp.map(n => veNhom(n, '#8A724C')).join('') : '');
     const html = `
       <div id="modal-chi-tiet-chi" onclick="if(event.target===this)this.remove()" style="position:fixed; inset:0; background:rgba(42,36,32,0.4); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:12px; animation:fadeIn 0.25s ease-out;">
@@ -7609,14 +7632,51 @@ const App = {
           </div>
           <div style="flex:1; overflow-y:auto; padding:4px 20px 12px; display:flex; flex-direction:column; gap:8px;">${than}</div>
           <div style="padding:14px 20px; border-top:1px solid rgba(138,114,76,0.15); display:flex; flex-direction:column; gap:4px; font-size:13.5px;">
-            <div style="display:flex; justify-content:space-between;"><span style="font-weight:700; color:#2A2420;">Chi phí kinh doanh</span><b style="font-size:18px; color:#2A2420;">${this._formatVND(tongCP)}</b></div>
+            <div style="display:flex; justify-content:space-between;"><span style="font-weight:700; color:#2A2420;">Chi phí kinh doanh</span><b style="font-size:18px; color:#2A2420;">${this._formatVND(tongCPKD)}</b></div>
+            ${soAds ? `<div style="display:flex; justify-content:space-between; color:#8A724C;"><span>· trong đó ads TK nhân viên (sale tiêu thật)</span><span>${this._formatVND(soAds)}</span></div>` : ''}
             <div style="display:flex; justify-content:space-between; color:#8A724C;"><span>Không phải chi phí (tạm ứng, điều chỉnh)</span><span>${this._formatVND(tongKCP)}</span></div>
-            <div style="display:flex; justify-content:space-between; color:#8A724C;"><span>Tổng chi (= thẻ TỔNG CHI)</span><span>${this._formatVND(tong)}</span></div>
-            <div style="font-size:11.5px; color:#8A724C; margin-top:4px; line-height:1.5;">Tính theo ngày tiền đi ra. Lương trả trong tháng có thể là lương tháng trước (vd lương T9 trả 08/10). Tiền qua lại TK BIDV không tính.</div>
+            <div style="display:flex; justify-content:space-between; color:#8A724C;"><span>Tổng tiền chi ra trong sổ quỹ (= thẻ TỔNG CHI)</span><span>${this._formatVND(tong)}</span></div>
+            <div style="font-size:11.5px; color:#8A724C; margin-top:4px; line-height:1.5;">Sổ quỹ tính theo ngày tiền đi ra; ads TK nhân viên tính theo ngày sale tiêu. Lương trả trong tháng có thể là lương tháng trước (vd lương T9 trả 08/10). Tiền qua lại TK BIDV không tính.</div>
           </div>
         </div>
       </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
+  },
+
+  /** Chi ads TK nhân viên (sale tiêu thật) trong kỳ [tu, den] — dùng dữ liệu Quỹ ads đã nạp (chỉ đọc).
+   *  Tháng nằm trọn trong kỳ và đã có số thực trả (SỐ NHẬP THÁNG) -> số thực;
+   *  còn lại -> Chi tiêu ADS NGÀY của bài "TK nhân viên" × hệ số (ước tính). */
+  _adsNvTrongKy(tu, den) {
+    const qa = this._quyAds || {};
+    if (qa.dangTai) return { dangTai: true };
+    if (qa.loiAds || !qa.ads) return { loi: qa.loiAds || 'Chưa đọc được file PXDE - CHIẾN DỊCH ADS.' };
+    if (qa.ads.loi && qa.ads.loi.length) return { loi: qa.ads.loi.join(' ') };
+    const heSo = (qa.cauHinh && qa.cauHinh.heSo) || 1;
+    const N = (x) => this._nhanCot(x);
+    const homNay = new Date(); homNay.setHours(23, 59, 59, 999);
+    const denThat = den > homNay ? homNay : den;
+    const trong = (d) => d >= tu && d <= denThat;
+    const tronThang = (khoa) => {
+      const [y, m] = khoa.split('-').map(Number);
+      return new Date(y, m - 1, 1) >= tu && new Date(y, m, 0, 23, 59, 59) <= den;
+    };
+    const theoThang = {};   // khoa -> tổng chi tiêu ngày (chưa nhân hệ số)
+    let chuaPL = 0;
+    (qa.ads.ngay || []).forEach(r => {
+      if (!trong(r.date)) return;
+      const tk = qa.ads.danhMuc[N(r.ma)];
+      if (tk === undefined || tk === '') { chuaPL++; return; }
+      if (N(tk) !== 'tk nhân viên') return;
+      const k = this._khoaThang(r.date);
+      theoThang[k] = (theoThang[k] || 0) + r.chi;
+    });
+    Object.keys(qa.ads.thang || {}).forEach(k => { if (tronThang(k) && !(k in theoThang)) theoThang[k] = 0; });
+    const chiTiet = Object.keys(theoThang).sort().map(k => {
+      const thuc = qa.ads.thang[k];
+      if (tronThang(k) && thuc != null) return { khoa: k, cach: 'thuc', so: thuc };
+      return { khoa: k, cach: 'uoc', so: Math.round(theoThang[k] * heSo) };
+    });
+    return { tong: chiTiet.reduce((t, c) => t + c.so, 0), chiTiet, chuaPL, heSo };
   },
 
   _tctMoNhomChi(i) {
