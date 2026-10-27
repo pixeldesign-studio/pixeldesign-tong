@@ -43,10 +43,11 @@ const App = {
       if (this.session && !scopeOk) {
         console.log(`[Auth] Scope version cũ (${this.session?.scopeVersion}) < hiện tại (${CONFIG.SCOPE_VERSION}). Xoá session, yêu cầu đăng nhập lại.`);
       }
-      // [iPhone - lan 12] Da tung dang nhap, chi het han -> tu gia han im lang
-      // bang chuyen trang (khong can bam nut). Neu Google doi chon tai khoan
-      // thi se tu hien trang Google, chon xong quay ve app.
-      if (this._laAppIPhone() && this.session?.email && scopeOk) {
+      // [iPhone lan 12 · may tinh 27/10] Da tung dang nhap, chi het han -> tu gia han
+      // im lang bang chuyen trang (khong can bam nut) tren MOI thiet bi.
+      // Neu Google doi chon tai khoan thi tu hien trang Google, chon xong quay ve app.
+      // Bam Dang xuat se xoa phien -> lan sau KHONG tu vao nua.
+      if (this.session?.email && scopeOk) {
         this._showLogin();
         this._setLoginLoading('Đang kết nối lại...');
         this._chuyenTrangDangNhap(true);
