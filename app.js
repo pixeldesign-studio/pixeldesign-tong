@@ -6646,6 +6646,15 @@ const App = {
       filteredManualData.push(r);
     });
 
+    // Popup "Chi tiết Tổng chi" dùng đúng các khoản đã cộng vào thẻ TỔNG CHI
+    this._tctChiKy = filteredManualData.filter(r => (r.loai || '').trim() === 'Chi' && !this._laHMBidv(r.hang_muc));
+    {
+      const f2 = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+      const coDau = startDate.getTime() > 0, coCuoi = endDate.getFullYear() < 2999;
+      this._tctNhanKy = coDau && coCuoi ? `${f2(startDate)} – ${f2(endDate)}`
+        : coDau ? `Từ ${f2(startDate)}` : coCuoi ? `Đến ${f2(endDate)}` : 'Tất cả';
+    }
+
     // TK BIDV trong kỳ đang lọc (không phụ thuộc bộ lọc Loại)
     const bidvKy = { vao: 0, tra: 0, rut: 0 };
     this._taiChinhManualData.forEach(r => {
@@ -6760,9 +6769,10 @@ const App = {
             <div class="stat-num-trendy">${this._formatVND(tongThuTong)}</div>
             <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
           </div>
-          <div class="trendy-stat-card trendy-stat-4">
+          <div class="trendy-stat-card trendy-stat-4" onclick="App._tctMoPopupChi()" style="cursor:pointer;" title="Xem chi tiết theo hạng mục">
             <div class="stat-label-trendy">TỔNG CHI</div>
             <div class="stat-num-trendy">${this._formatVND(tongChiThuCong)}</div>
+            <div style="font-size:12px; margin-top:6px; opacity:0.75; font-weight:600;">Bấm xem chi tiết ›</div>
             <div class="stat-icon-dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg></div>
           </div>
           <div class="trendy-stat-card trendy-stat-1">
@@ -7534,6 +7544,90 @@ const App = {
   },
 
   // ==========================================
+  // POPUP CHI TIẾT TỔNG CHI (chỉ đọc, không ghi Sheets)
+  // ==========================================
+  _tctMoPopupChi() {
+    const cu = document.getElementById('modal-chi-tiet-chi'); if (cu) cu.remove();
+    const ds = this._tctChiKy || [];
+    const esc = (v) => this._escHtml(v == null ? '' : String(v));
+    const khongCP = this.TCT_KHONG_PHAI_CHI_PHI || [];
+    const nhom = {};
+    ds.forEach(r => {
+      const hm = this._chuanChu(r.hang_muc) || '(Không có hạng mục)';
+      if (!nhom[hm]) nhom[hm] = { hm, tong: 0, ds: [] };
+      nhom[hm].tong += r.so_tien; nhom[hm].ds.push(r);
+    });
+    const tatCa = Object.values(nhom).sort((a, b) => b.tong - a.tong);
+    const cp = tatCa.filter(n => !khongCP.includes(n.hm));
+    const kcp = tatCa.filter(n => khongCP.includes(n.hm));
+    const tong = ds.reduce((t, r) => t + r.so_tien, 0);
+    const tongCP = cp.reduce((t, n) => t + n.tong, 0);
+    const tongKCP = tong - tongCP;
+    const giaiThich = {
+      'Quảng cáo – ứng sale': 'Tiền ứng cho sale chạy ads, chưa phải chi phí. Số sale tiêu thật xem thẻ Quỹ ads.',
+      'Điều chỉnh – không tính chi phí': 'Khoản cân đối sổ (tiền đơn VAT về TK công ty TNHH, hoàn cọc…), không phải chi phí.',
+    };
+    let stt = 0;
+    const veNhom = (n, mauTien) => {
+      const i = stt++;
+      const pt = tong > 0 ? Math.round(n.tong / tong * 1000) / 10 : 0;
+      const dong = n.ds.slice().sort((a, b) => (a.parsedDate?.getTime() || 0) - (b.parsedDate?.getTime() || 0)).map(r => `
+        <div style="display:flex; flex-wrap:wrap; gap:4px 12px; padding:8px 0; border-top:1px dashed rgba(138,114,76,0.18); font-size:13px;">
+          <div style="min-width:82px; color:#8A724C;">${esc(this._ngayHienThi(r.ngay))}</div>
+          <div style="flex:1 1 200px; color:#4A4036;">${esc(r.ghi_chu) || '<span style="opacity:.5">(không ghi chú)</span>'}<div style="font-size:11.5px; color:#8A724C;">${esc(this._tkCua(r))}</div></div>
+          <div style="font-weight:700; color:#2A2420; white-space:nowrap;">${this._formatVND(r.so_tien)}</div>
+        </div>`).join('');
+      return `
+        <div style="border:1px solid rgba(138,114,76,0.14); border-radius:12px; padding:10px 14px; background:#FFF;">
+          <div onclick="App._tctMoNhomChi(${i})" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+            <span id="tct-chi-mui-${i}" style="color:#8A724C; transition:transform .2s; display:inline-block;">›</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-weight:700; color:#2A2420;">${esc(n.hm)}</div>
+              <div style="font-size:12px; color:#8A724C;">${n.ds.length} khoản · ${pt}% tổng chi</div>
+            </div>
+            <div style="font-weight:800; color:${mauTien}; white-space:nowrap;">${this._formatVND(n.tong)}</div>
+          </div>
+          ${giaiThich[n.hm] ? `<div style="font-size:12px; color:#8A5A00; margin:6px 0 0 20px;">${esc(giaiThich[n.hm])}</div>` : ''}
+          <div id="tct-chi-nhom-${i}" style="display:none; margin:8px 0 0 20px;">${dong}</div>
+        </div>`;
+    };
+    const tieuDeNhom = (chu, so) => `<div style="display:flex; justify-content:space-between; align-items:baseline; margin:6px 2px 2px; font-size:12px; font-weight:700; letter-spacing:.4px; color:#8A724C; text-transform:uppercase;"><span>${chu}</span><span>${this._formatVND(so)}</span></div>`;
+    const than = ds.length === 0
+      ? `<div style="text-align:center; padding:40px 12px; color:#8A724C; font-style:italic;">Kỳ này không có khoản chi nào.</div>`
+      : tieuDeNhom('Chi phí kinh doanh', tongCP) + cp.map(n => veNhom(n, '#2A2420')).join('')
+        + (kcp.length ? tieuDeNhom('Không phải chi phí', tongKCP) + kcp.map(n => veNhom(n, '#8A724C')).join('') : '');
+    const html = `
+      <div id="modal-chi-tiet-chi" onclick="if(event.target===this)this.remove()" style="position:fixed; inset:0; background:rgba(42,36,32,0.4); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:12px; animation:fadeIn 0.25s ease-out;">
+        <div style="background:#FAF8F5; width:100%; max-width:720px; border-radius:20px; box-shadow:0 24px 48px rgba(42,36,32,0.12); display:flex; flex-direction:column; max-height:92vh;">
+          <div style="padding:18px 20px 10px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <div>
+              <h3 style="margin:0; font-size:19px; color:#2A2420; font-weight:800;">Chi tiết Tổng chi</h3>
+              <div style="font-size:12.5px; color:#8A724C; margin-top:2px;">${esc(this._tctNhanKy || '')} · bấm từng hạng mục để xem khoản</div>
+            </div>
+            <button onclick="document.getElementById('modal-chi-tiet-chi').remove()" style="background:rgba(138,114,76,0.08); border:none; width:32px; height:32px; border-radius:50%; cursor:pointer; color:#8A724C; font-size:18px; flex-shrink:0;">✕</button>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding:4px 20px 12px; display:flex; flex-direction:column; gap:8px;">${than}</div>
+          <div style="padding:14px 20px; border-top:1px solid rgba(138,114,76,0.15); display:flex; flex-direction:column; gap:4px; font-size:13.5px;">
+            <div style="display:flex; justify-content:space-between;"><span style="font-weight:700; color:#2A2420;">Chi phí kinh doanh</span><b style="font-size:18px; color:#2A2420;">${this._formatVND(tongCP)}</b></div>
+            <div style="display:flex; justify-content:space-between; color:#8A724C;"><span>Không phải chi phí (tạm ứng, điều chỉnh)</span><span>${this._formatVND(tongKCP)}</span></div>
+            <div style="display:flex; justify-content:space-between; color:#8A724C;"><span>Tổng chi (= thẻ TỔNG CHI)</span><span>${this._formatVND(tong)}</span></div>
+            <div style="font-size:11.5px; color:#8A724C; margin-top:4px; line-height:1.5;">Tính theo ngày tiền đi ra. Lương trả trong tháng có thể là lương tháng trước (vd lương T9 trả 08/10). Tiền qua lại TK BIDV không tính.</div>
+          </div>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  },
+
+  _tctMoNhomChi(i) {
+    const k = document.getElementById('tct-chi-nhom-' + i);
+    const m = document.getElementById('tct-chi-mui-' + i);
+    if (!k) return;
+    const mo = k.style.display === 'none';
+    k.style.display = mo ? 'block' : 'none';
+    if (m) m.style.transform = mo ? 'rotate(90deg)' : '';
+  },
+
+  // ==========================================
   // SỔ QUỸ — DANH SÁCH HẠNG MỤC CỐ ĐỊNH
   // ------------------------------------------
   // Viết đúng từng chữ. Dấu gạch là "–" (gạch ngang ngắn).
@@ -7551,6 +7645,9 @@ const App = {
       'TK BIDV – trả lại tiền ứng',
       'TK BIDV – rút lợi nhuận',
       'Etsy – trả phí sàn',
+      'Kế toán – thuế',
+      'Chiết khấu / hoa hồng',
+      'Điều chỉnh – không tính chi phí',
       'Khác',
     ],
     'Thu': [
@@ -7569,7 +7666,10 @@ const App = {
     const h = this._chuanChu(hm);
     return h === this.HM_BIDV_VAO || h === this.HM_BIDV_TRA || h === this.HM_BIDV_RUT;
   },
-  TCT_BAT_BUOC_GHI_CHU: ['Khác', 'Thu khác'],
+  TCT_BAT_BUOC_GHI_CHU: ['Khác', 'Thu khác', 'Điều chỉnh – không tính chi phí'],
+  HM_DIEU_CHINH: 'Điều chỉnh – không tính chi phí',
+  // Vẫn nằm trong TỔNG CHI (tiền thật đi ra), nhưng popup tách riêng: KHÔNG phải chi phí kinh doanh.
+  TCT_KHONG_PHAI_CHI_PHI: ['Quảng cáo – ứng sale', 'Điều chỉnh – không tính chi phí'],
   HM_UNG_SALE:  'Quảng cáo – ứng sale',
   HM_HOAN_UNG:  'Quảng cáo – sale hoàn ứng',
 
